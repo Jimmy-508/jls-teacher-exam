@@ -1,0 +1,20 @@
+import {
+  ACTIVE_PRACTICE_SESSION_STORAGE_KEY,
+  LAST_PRACTICE_SESSION_STORAGE_KEY,
+  LEARNING_PROFILE_STORAGE_KEY,
+  LEARNING_RECORDS_STORAGE_KEY,
+} from './learningEngine';
+import { JLS_LEARNING_RECORDS_STORAGE_KEY } from './storageKeys';
+import { remove } from './storageService';
+
+export const LEARNING_PROGRESS_STORAGE_KEYS = [
+  LEARNING_RECORDS_STORAGE_KEY,
+  LEARNING_PROFILE_STORAGE_KEY,
+  ACTIVE_PRACTICE_SESSION_STORAGE_KEY,
+  LAST_PRACTICE_SESSION_STORAGE_KEY,
+  JLS_LEARNING_RECORDS_STORAGE_KEY,
+] as const;
+
+export async function resetLearningProgress(): Promise<void> {
+  await Promise.all(LEARNING_PROGRESS_STORAGE_KEYS.map((key) => remove(key)));
+}
