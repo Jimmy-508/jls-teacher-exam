@@ -4,6 +4,7 @@ import { saveBlobWithPicker, type SaveBlobResult } from './fileSaveService';
 import { LEARNING_RECORDS_STORAGE_KEY } from './learningEngine';
 import { JLS_LEARNING_RECORDS_STORAGE_KEY } from './storageKeys';
 import { load } from './storageService';
+import { buildExamYearOptions } from './yearService';
 import { compareTeacherExamSubjects, TEACHER_EXAM_SUBJECT_ORDER, sortTeacherExamSubjects } from '../constants/subjectOrder';
 import type { LearningRecord } from '../types/LearningRecord';
 import type { ChoiceKey, Question } from '../types/question';
@@ -978,15 +979,7 @@ function buildOptions(values: readonly string[]): string[] {
 }
 
 function buildYearOptions(values: readonly string[]): string[] {
-  const years = Array.from(
-    new Set(
-      values
-        .map((value) => Number(value.trim()))
-        .filter((year) => Number.isFinite(year)),
-    ),
-  ).sort((left, right) => right - left);
-
-  return [ALL_FILTER_VALUE, ...years.map((year) => String(year))];
+  return [ALL_FILTER_VALUE, ...buildExamYearOptions(values)];
 }
 
 function buildSubjectOptions(values: readonly string[]): string[] {

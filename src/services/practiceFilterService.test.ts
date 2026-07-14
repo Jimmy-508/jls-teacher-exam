@@ -11,21 +11,27 @@ import {
 } from './practiceFilterService';
 
 describe('practiceFilterService', () => {
-  it('sorts year options by newest numeric year first and keeps non-numeric years last', () => {
+  it('sorts year options by newest exam year first while preserving session years', () => {
     const questions = [
-      createQuestion({ id: 'Q1', year: '113' }),
+      createQuestion({ id: 'Q1', year: '106' }),
       createQuestion({ id: 'Q2', year: '115' }),
-      createQuestion({ id: 'Q3', year: '114' }),
-      createQuestion({ id: 'Q4', year: 'alpha' }),
-      createQuestion({ id: 'Q5', year: '115' }),
+      createQuestion({ id: 'Q3', year: '108-1' }),
+      createQuestion({ id: 'Q4', year: '108-2' }),
+      createQuestion({ id: 'Q5', year: '109' }),
+      createQuestion({ id: 'Q6', year: '94' }),
+      createQuestion({ id: 'Q7', year: '115' }),
+      createQuestion({ id: 'Q8', year: '' }),
     ];
 
     expect(buildPracticeFilterOptionsForFilters(questions, { year: '', subject: '' }).years).toEqual([
       '115',
-      '114',
-      '113',
-      'alpha',
+      '109',
+      '108-2',
+      '108-1',
+      '106',
+      '94',
     ]);
+    expect(buildPracticeFilterOptionsForFilters(questions, { year: '', subject: '' }).years).not.toContain('107');
   });
 
   it('sorts core concepts with English-leading concepts before Chinese concepts', () => {
@@ -108,6 +114,25 @@ describe('practiceFilterService', () => {
     );
 
     expect(result.map((question) => question.id)).toEqual(['Q1']);
+  });
+
+  it('filters session exam years by exact string without merging the same main year', () => {
+    const questions = [
+      createQuestion({ id: 'Q1', year: '108-1', subject: '教育評量', coreConcept: '形成性評量', type: '選擇題' }),
+      createQuestion({ id: 'Q2', year: '108-2', subject: '教育評量', coreConcept: '形成性評量', type: '選擇題' }),
+      createQuestion({ id: 'Q3', year: '108-1', subject: '教育評量', coreConcept: '形成性評量', type: '非選題' }),
+    ];
+
+    expect(
+      filterPracticeQuestions(questions, { ...DEFAULT_PRACTICE_FILTERS, year: '108-1' }, 'choice').map(
+        (question) => question.id,
+      ),
+    ).toEqual(['Q1']);
+    expect(
+      filterPracticeQuestions(questions, { ...DEFAULT_PRACTICE_FILTERS, year: '108-2' }, 'choice').map(
+        (question) => question.id,
+      ),
+    ).toEqual(['Q2']);
   });
 
   it('detects wrong questions from CSV correctness, CSV wrong count, or LearningRecord', () => {

@@ -2,6 +2,7 @@ import type { LearningRecord } from '../types/LearningRecord';
 import type { Question } from '../types/question';
 import { sortTeacherExamSubjects } from '../constants/subjectOrder';
 import { getPracticeQuestionsByType, type PracticeQuestionTypeFilter } from './questionEngine';
+import { buildExamYearOptions } from './yearService';
 
 export type WrongQuestionFilter = 'all' | 'wrongOnly';
 
@@ -34,7 +35,7 @@ export function buildPracticeFilterOptions(questions: readonly Question[], selec
   const questionsForCoreConceptOptions = questionsForSubjectOptions;
 
   return {
-    years: uniqueSorted(questions.map((question) => question.year), sortYears),
+    years: buildExamYearOptions(questions.map((question) => question.year)),
     subjects: sortTeacherExamSubjects(questionsForSubjectOptions.map((question) => question.subject)),
     coreConcepts: sortCoreConcepts(questionsForCoreConceptOptions.map((question) => question.coreConcept ?? question.knowledgeNode)),
   };
@@ -50,7 +51,7 @@ export function buildPracticeFilterOptionsForFilters(
     : yearFilteredQuestions;
 
   return {
-    years: uniqueSorted(questions.map((question) => question.year), sortYears),
+    years: buildExamYearOptions(questions.map((question) => question.year)),
     subjects: sortTeacherExamSubjects(yearFilteredQuestions.map((question) => question.subject)),
     coreConcepts: sortCoreConcepts(subjectFilteredQuestions.map((question) => question.coreConcept ?? question.knowledgeNode)),
   };
@@ -120,10 +121,6 @@ export function summarizePracticeFilters(filters: PracticeFilters): string[] {
   return labels;
 }
 
-function uniqueSorted(values: readonly string[], sorter: (left: string, right: string) => number): string[] {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort(sorter);
-}
-
 export function sortCoreConcepts(concepts: readonly string[]): string[] {
   const uniqueConcepts = Array.from(new Set(concepts.map((concept) => concept.trim()).filter(Boolean)));
   const englishConcepts = uniqueConcepts.filter(isEnglishLeadingCoreConcept).sort(compareEnglishCoreConceptByKey);
@@ -173,27 +170,4 @@ function compareEnglishCoreConcept(left: string, right: string): number {
 
 function compareZhCoreConcept(left: string, right: string): number {
   return left.localeCompare(right, 'zh-Hant', { numeric: true, sensitivity: 'base' });
-}
-
-function sortYears(left: string, right: string): number {
-  const leftNumber = Number(left);
-  const rightNumber = Number(right);
-
-  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
-    return rightNumber - leftNumber;
-  }
-
-  if (Number.isFinite(leftNumber)) {
-    return -1;
-  }
-
-  if (Number.isFinite(rightNumber)) {
-    return 1;
-  }
-
-  return sortByZh(left, right);
-}
-
-function sortByZh(left: string, right: string): number {
-  return left.localeCompare(right, 'zh-Hant');
 }

@@ -80,13 +80,16 @@ describe('wrongQuestionExportService', () => {
     ]);
   });
 
-  it('sorts wrong-question year options by newest numeric year first with all fixed first', () => {
+  it('sorts wrong-question year options by newest exam year first with all fixed first', () => {
     const questions = [
-      createQuestion('q1', '114', '教育理念與實務', '測驗', '1', CHOICE_QUESTION_TYPE),
+      createQuestion('q1', '106', '教育理念與實務', '測驗', '1', CHOICE_QUESTION_TYPE),
       createQuestion('q2', '115', '教育理念與實務', '測驗', '2', CHOICE_QUESTION_TYPE),
-      createQuestion('q3', '114', '教育理念與實務', '測驗', '3', CHOICE_QUESTION_TYPE),
+      createQuestion('q3', '108-1', '教育理念與實務', '測驗', '3', CHOICE_QUESTION_TYPE),
       createQuestion('q4', '', '教育理念與實務', '測驗', '4', CHOICE_QUESTION_TYPE),
-      createQuestion('q5', 'unknown', '教育理念與實務', '測驗', '5', CHOICE_QUESTION_TYPE),
+      createQuestion('q5', '108-2', '教育理念與實務', '測驗', '5', CHOICE_QUESTION_TYPE),
+      createQuestion('q6', '109', '教育理念與實務', '測驗', '6', CHOICE_QUESTION_TYPE),
+      createQuestion('q7', '94', '教育理念與實務', '測驗', '7', CHOICE_QUESTION_TYPE),
+      createQuestion('q8', '108-2', '教育理念與實務', '測驗', '8', CHOICE_QUESTION_TYPE),
     ];
 
     const options = buildWrongQuestionFilterOptions(questions, {
@@ -95,7 +98,41 @@ describe('wrongQuestionExportService', () => {
       learningTheme: getAllFilterValue(),
     });
 
-    expect(options.years).toEqual([getAllFilterValue(), '115', '114']);
+    expect(options.years).toEqual([getAllFilterValue(), '115', '109', '108-2', '108-1', '106', '94']);
+    expect(options.years).not.toContain('107');
+  });
+
+  it('filters wrong-question exports by exact session exam year', () => {
+    const questions = [
+      createQuestion('q1', '108-1', '教育理念與實務', '測驗', '1', CHOICE_QUESTION_TYPE),
+      createQuestion('q2', '108-2', '教育理念與實務', '測驗', '2', CHOICE_QUESTION_TYPE),
+    ];
+    const records = {
+      q1: createRecord('q1', 1, false),
+      q2: createRecord('q2', 1, false),
+    };
+
+    expect(
+      filterWrongChoiceQuestions(questions, records, {
+        year: '108-1',
+        subject: getAllFilterValue(),
+        learningTheme: getAllFilterValue(),
+      }).map((item) => item.question.id),
+    ).toEqual(['q1']);
+    expect(
+      filterWrongChoiceQuestions(questions, records, {
+        year: '108-2',
+        subject: getAllFilterValue(),
+        learningTheme: getAllFilterValue(),
+      }).map((item) => item.question.id),
+    ).toEqual(['q2']);
+    expect(
+      filterWrongChoiceQuestions(questions, records, {
+        year: getAllFilterValue(),
+        subject: getAllFilterValue(),
+        learningTheme: getAllFilterValue(),
+      }).map((item) => item.question.id),
+    ).toEqual(['q1', 'q2']);
   });
 
   it('normalizes answer and question heading text', () => {
