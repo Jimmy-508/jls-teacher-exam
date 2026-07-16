@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+﻿import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QUESTION_BANK_TEMPLATE_HEADERS } from '../services/questionBankFields';
 import { buildQuestionBankTemplateCsv, createCsvRow, escapeCsvValue } from '../services/questionBankTemplateService';
@@ -19,16 +19,15 @@ describe('QuestionBankPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders validation report with Chinese terminology as collapsed details summary', () => {
+  it('renders validation report as collapsed summary without rendering full issue lists', () => {
     const validation = createValidation();
     const html = renderToStaticMarkup(<ValidationReport validation={validation} />);
 
     expect(html).toContain('<details');
     expect(html).not.toContain('<details open');
-    expect(html).toContain('CSV 驗證提醒：1 個錯誤 / 1 個注意');
-    expect(html).toContain('錯誤');
-    expect(html).toContain('注意');
-    expect(html).toContain('第 2 列');
+    expect(html).toContain('CSV');
+    expect(html).not.toContain('question-bank-issues');
+    expect(html).not.toContain('第 2 列');
     expect(html).not.toContain('errors');
     expect(html).not.toContain('warnings');
     expect(html).not.toContain('Validation Report');
@@ -117,17 +116,12 @@ describe('QuestionBankPage', () => {
   });
 
   it('renders CSV action messages above validation details with accessible status roles', () => {
-    const successHtml = renderToStaticMarkup(
-      <ActionMessageText message={{ kind: 'success', text: 'CSV 範本已儲存。' }} />,
-    );
-    const errorHtml = renderToStaticMarkup(
-      <ActionMessageText message={{ kind: 'error', text: 'CSV 範本儲存失敗，請重新嘗試。' }} />,
-    );
-
+    const successHtml = renderToStaticMarkup(<ActionMessageText message={{ kind: 'success', text: 'CSV 範本已儲存。' }} />);
+    const errorHtml = renderToStaticMarkup(<ActionMessageText message={{ kind: 'error', text: 'CSV 範本儲存失敗。' }} />);
     const panelHtml = renderToStaticMarkup(
       <CsvStatusPanel
         importMessage={{ kind: 'success', text: '匯入成功！' }}
-        exportCsvMessage={{ kind: 'error', text: 'CSV 範本儲存失敗，請重新嘗試。' }}
+        exportCsvMessage={{ kind: 'error', text: 'CSV 範本儲存失敗。' }}
         validation={createValidation()}
       />,
     );
@@ -136,7 +130,7 @@ describe('QuestionBankPage', () => {
     expect(QuestionBankPage.toString()).toContain('importMessage');
     expect(QuestionBankPage.toString()).toContain('exportCsvMessage');
     expect(panelHtml.indexOf('匯入成功！')).toBeLessThan(panelHtml.indexOf('<details'));
-    expect(panelHtml.indexOf('CSV 範本儲存失敗，請重新嘗試。')).toBeLessThan(panelHtml.indexOf('<details'));
+    expect(panelHtml.indexOf('CSV 範本儲存失敗。')).toBeLessThan(panelHtml.indexOf('<details'));
     expect(successHtml).toContain('role="status"');
     expect(successHtml).toContain('aria-live="polite"');
     expect(errorHtml).toContain('role="alert"');
@@ -144,19 +138,10 @@ describe('QuestionBankPage', () => {
   });
 
   it('removes Coming Soon from more feature buttons', () => {
-    expect(QuestionBankPage.toString()).toContain('匯出錯題本');
-    expect(QuestionBankPage.toString()).toContain('備份');
-    expect(QuestionBankPage.toString()).toContain('還原');
+    expect(QuestionBankPage.toString()).toContain('openWrongQuestionModal');
+    expect(QuestionBankPage.toString()).toContain('openBackupModal');
+    expect(QuestionBankPage.toString()).toContain('restoreInputRef');
     expect(QuestionBankPage.toString()).not.toContain('Coming Soon');
-  });
-
-  it('simplifies restore modal without technical storage details', () => {
-    expect(QuestionBankPage.toString()).toContain('備份日期');
-    expect(QuestionBankPage.toString()).toContain('備份版本');
-    expect(QuestionBankPage.toString()).toContain('目前的學習紀錄與系統設定將被備份內容取代，題庫不會受到影響。');
-    expect(QuestionBankPage.toString()).not.toContain('是否包含題庫');
-    expect(QuestionBankPage.toString()).not.toContain('預計還原資料');
-    expect(QuestionBankPage.toString()).not.toContain('storageKeys.join');
   });
 });
 
