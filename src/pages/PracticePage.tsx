@@ -725,6 +725,18 @@ export function PracticeCountSelector({
   onChange: (value: PracticeQuestionCount) => void;
   onModeChange: (value: PracticeCountMode) => void;
 }) {
+  const [draftValue, setDraftValue] = useState(String(value));
+
+  useEffect(() => {
+    setDraftValue(String(value));
+  }, [value, mode]);
+
+  function commitCustomQuestionCount() {
+    const nextValue = sanitizeCustomQuestionCount(Number(draftValue), maxCount);
+    setDraftValue(String(nextValue));
+    onChange(nextValue);
+  }
+
   return (
     <fieldset className="practice-type-selector">
       <legend>題數</legend>
@@ -760,8 +772,14 @@ export function PracticeCountSelector({
           max={maxCount}
           min={1}
           type="number"
-          value={value}
-          onChange={(event) => onChange(sanitizeCustomQuestionCount(Number(event.target.value), maxCount))}
+          value={draftValue}
+          onBlur={commitCustomQuestionCount}
+          onChange={(event) => setDraftValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.currentTarget.blur();
+            }
+          }}
         />
       ) : null}
     </fieldset>
