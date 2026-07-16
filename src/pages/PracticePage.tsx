@@ -148,7 +148,14 @@ export default function PracticePage() {
           requestedLearningTheme || requestedSubject || requestedCoreConcept || requestedQuestionIds?.length || hasActivePracticeFilters(filters),
         );
         const restoredSession =
-          canUseRestoredPracticeSession(savedSession, loadedQuestions, typeFilter, shouldStartFocusedPractice, filteredQuestions)
+          canUseRestoredPracticeSession(
+            savedSession,
+            loadedQuestions,
+            typeFilter,
+            shouldStartFocusedPractice,
+            filteredQuestions,
+            safeQuestionCount,
+          )
             ? savedSession
             : null;
         const practiceQuestions = selectPracticeQuestions({
@@ -385,6 +392,15 @@ export default function PracticePage() {
     setTypeFilter(nextTypeFilter);
   }
 
+  async function handleQuestionCountChange(nextQuestionCount: PracticeQuestionCount) {
+    if (nextQuestionCount === questionCount) {
+      return;
+    }
+
+    await resetCurrentPracticeState();
+    setQuestionCount(nextQuestionCount);
+  }
+
   async function handleFiltersChange(nextFilters: PracticeFilters) {
     await resetCurrentPracticeState();
     setFilters(normalizePracticeFiltersForOptions(nextFilters, allQuestions));
@@ -473,7 +489,7 @@ export default function PracticePage() {
             maxCount={Math.max(eligibleQuestionCount, 1)}
             mode={questionCountMode}
             value={questionCount}
-            onChange={setQuestionCount}
+            onChange={(value) => void handleQuestionCountChange(value)}
             onModeChange={setQuestionCountMode}
           />
         </div>
@@ -764,8 +780,13 @@ export function canUseRestoredPracticeSession(
   typeFilter: PracticeQuestionTypeFilter,
   shouldStartFocusedPractice: boolean,
   filteredQuestions: readonly Question[] = loadedQuestions,
+  questionCount?: PracticeQuestionCount,
 ): boolean {
   if (shouldStartFocusedPractice || typeFilter !== 'choice' || !canRestorePracticeSession(savedSession, loadedQuestions)) {
+    return false;
+  }
+
+  if (questionCount && savedSession && savedSession.questionIds.length !== Math.min(questionCount, filteredQuestions.length)) {
     return false;
   }
 

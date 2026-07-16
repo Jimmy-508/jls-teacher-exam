@@ -173,6 +173,19 @@ describe('PracticePage controls', () => {
     expect(canUseRestoredPracticeSession(createSession(), [createQuestion('Q1')], 'choice', true)).toBe(false);
   });
 
+  it('does not restore a session when the selected question count changes', () => {
+    expect(
+      canUseRestoredPracticeSession(
+        createSession(),
+        [createQuestion('Q1'), createQuestion('Q2'), createQuestion('Q3')],
+        'choice',
+        false,
+        [createQuestion('Q1'), createQuestion('Q2'), createQuestion('Q3')],
+        3,
+      ),
+    ).toBe(false);
+  });
+
   it('keeps Knowledge questionIds as the practice scope when switching question types', () => {
     const loadedQuestions = [
       createQuestion('C1', { type: CHOICE_QUESTION_TYPE }),
