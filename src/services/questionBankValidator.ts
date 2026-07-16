@@ -7,6 +7,7 @@ import {
 } from './questionBankFields';
 import { getLearningThemeDisplayName } from './displayDictionary';
 import type { QuestionBankValidationResult, ValidationIssue } from '../types/QuestionBankValidation';
+import type { Question } from '../types/question';
 
 const CHOICE_KEYS = new Set(['A', 'B', 'C', 'D']);
 const WARNING_VALUE_FIELDS = [
@@ -47,7 +48,12 @@ const WARNING_VALUE_FIELDS = [
 
 type CsvRow = Record<string, string>;
 
-export function validateQuestionBankCsv(csvText: string): QuestionBankValidationResult {
+export interface ParsedQuestionBank {
+  questions: Question[];
+  validation: QuestionBankValidationResult;
+}
+
+export function parseAndValidateQuestionBankCsv(csvText: string): ParsedQuestionBank {
   const parsedCsv = parseCsvWithHeaders(csvText);
   const errors: ValidationIssue[] = [];
   const warnings: ValidationIssue[] = [];
@@ -133,19 +139,26 @@ export function validateQuestionBankCsv(csvText: string): QuestionBankValidation
   const uniqueCoreConcepts = new Set(questions.map((question) => question.coreConcept ?? question.knowledgeNode).filter(Boolean));
 
   return {
-    isValid: errors.length === 0,
-    errors,
-    warnings,
-    summary: {
-      totalQuestions: questions.length,
-      yearCount: uniqueYears.size,
-      subjectCount: uniqueSubjects.size,
-      learningThemeCount: uniqueThemes.size,
-      knowledgeNodeCount: uniqueCoreConcepts.size,
-      choiceQuestionCount: questions.filter((question) => question.type === CHOICE_QUESTION_TYPE).length,
-      essayQuestionCount: questions.filter((question) => question.type === ESSAY_QUESTION_TYPE).length,
+    questions,
+    validation: {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+      summary: {
+        totalQuestions: questions.length,
+        yearCount: uniqueYears.size,
+        subjectCount: uniqueSubjects.size,
+        learningThemeCount: uniqueThemes.size,
+        knowledgeNodeCount: uniqueCoreConcepts.size,
+        choiceQuestionCount: questions.filter((question) => question.type === CHOICE_QUESTION_TYPE).length,
+        essayQuestionCount: questions.filter((question) => question.type === ESSAY_QUESTION_TYPE).length,
+      },
     },
   };
+}
+
+export function validateQuestionBankCsv(csvText: string): QuestionBankValidationResult {
+  return parseAndValidateQuestionBankCsv(csvText).validation;
 }
 
 function hasChoiceOptions(row: CsvRow): boolean {

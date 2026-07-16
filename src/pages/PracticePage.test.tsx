@@ -68,23 +68,23 @@ describe('PracticePage controls', () => {
     expect(html).not.toContain('20 題');
   });
 
-  it('renders subject options in teacher exam order with all subjects first', () => {
+  it('renders subject options with all subjects first and Chinese language last', () => {
     const html = renderToStaticMarkup(
       <PracticeFilterSelector
         value={{ year: '', subject: '', coreConcept: '', wrongQuestion: 'all' }}
         options={{
           years: ['113'],
-          subjects: ['教育理念與實務', '課程教學與評量', '學習者發展與適性輔導', '國語文能力測驗'],
+          subjects: ['中等學校課程與教學', '青少年發展與輔導', '教育原理與制度', '國語文能力測驗'],
           coreConcepts: ['形成性評量'],
         }}
         onChange={() => undefined}
       />,
     );
 
-    expect(html.indexOf('全部科目')).toBeLessThan(html.indexOf('教育理念與實務'));
-    expect(html.indexOf('教育理念與實務')).toBeLessThan(html.indexOf('課程教學與評量'));
-    expect(html.indexOf('課程教學與評量')).toBeLessThan(html.indexOf('學習者發展與適性輔導'));
-    expect(html.indexOf('學習者發展與適性輔導')).toBeLessThan(html.indexOf('國語文能力測驗'));
+    expect(html.indexOf('全部科目')).toBeLessThan(html.indexOf('中等學校課程與教學'));
+    expect(html.indexOf('中等學校課程與教學')).toBeLessThan(html.indexOf('青少年發展與輔導'));
+    expect(html.indexOf('青少年發展與輔導')).toBeLessThan(html.indexOf('教育原理與制度'));
+    expect(html.indexOf('教育原理與制度')).toBeLessThan(html.indexOf('國語文能力測驗'));
   });
 
   it('renders all years first before newest-to-oldest year options', () => {

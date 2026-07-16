@@ -82,14 +82,20 @@ export async function loadWrongQuestionRecords(): Promise<Record<string, Learnin
 export function buildWrongQuestionFilterOptions(
   questions: readonly Question[],
   filters: WrongQuestionFilters,
+  recordsByQuestionId: Record<string, LearningRecord> = {},
+  questionIdentities: Record<string, QuestionIdentitySnapshot> = {},
 ): WrongQuestionFilterOptions {
   const yearFiltered = questions.filter((question) => matchesFilter(question.year, filters.year));
   const subjectFiltered = yearFiltered.filter((question) => matchesFilter(question.subject, filters.subject));
+  const hasWrongQuestionRecords = Object.keys(recordsByQuestionId).length > 0;
+  const learningThemeSource = hasWrongQuestionRecords
+    ? subjectFiltered.filter((question) => isWrongChoiceQuestionForRecord(question, recordsByQuestionId, questionIdentities))
+    : subjectFiltered;
 
   return {
     years: buildYearOptions(questions.map((question) => question.year)),
     subjects: buildSubjectOptions(yearFiltered.map((question) => question.subject)),
-    learningThemes: buildOptions(subjectFiltered.map((question) => question.learningTheme || question.group)),
+    learningThemes: buildLearningThemeOptions(learningThemeSource.map(getQuestionLearningTheme)),
   };
 }
 
@@ -103,7 +109,7 @@ export function filterWrongChoiceQuestions(
     .filter((question) => question.type === CHOICE_QUESTION_TYPE)
     .filter((question) => matchesFilter(question.year, filters.year))
     .filter((question) => matchesFilter(question.subject, filters.subject))
-    .filter((question) => matchesFilter(question.learningTheme || question.group, filters.learningTheme))
+    .filter((question) => matchesFilter(getQuestionLearningTheme(question), filters.learningTheme))
     .flatMap((question) => {
       const record = recordsByQuestionId[question.id];
       const wrongCount = Number(record?.wrongCount ?? 0);
@@ -113,6 +119,21 @@ export function filterWrongChoiceQuestions(
         : [];
     })
     .sort((left, right) => compareQuestions(left.question, right.question));
+}
+
+function isWrongChoiceQuestionForRecord(
+  question: Question,
+  recordsByQuestionId: Record<string, LearningRecord>,
+  questionIdentities: Record<string, QuestionIdentitySnapshot>,
+): boolean {
+  if (question.type !== CHOICE_QUESTION_TYPE) {
+    return false;
+  }
+
+  const record = recordsByQuestionId[question.id];
+  const wrongCount = Number(record?.wrongCount ?? 0);
+
+  return wrongCount > 0 && isRecordSafeForQuestion(record, question, questionIdentities[question.id]);
 }
 
 function isRecordSafeForQuestion(
@@ -974,8 +995,12 @@ function normalizeLearningRecords(
   );
 }
 
-function buildOptions(values: readonly string[]): string[] {
-  return [ALL_FILTER_VALUE, ...Array.from(new Set(values.filter(Boolean))).sort(compareNaturalText)];
+function buildLearningThemeOptions(values: readonly string[]): string[] {
+  const uniqueValues = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+  const englishValues = uniqueValues.filter(isEnglishLearningTheme).sort(compareEnglishText);
+  const nonEnglishValues = uniqueValues.filter((value) => !isEnglishLearningTheme(value)).sort(compareStrokeText);
+
+  return [ALL_FILTER_VALUE, ...englishValues, ...nonEnglishValues];
 }
 
 function buildYearOptions(values: readonly string[]): string[] {
@@ -1004,6 +1029,25 @@ function compareQuestions(left: Question, right: Question): number {
 
 function compareNaturalText(left: string, right: string): number {
   return left.localeCompare(right, 'zh-Hant', { numeric: true, sensitivity: 'base' });
+}
+
+const englishCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+const strokeCollator = new Intl.Collator('zh-Hant-TW-u-co-stroke', { numeric: true, sensitivity: 'base' });
+
+function compareEnglishText(left: string, right: string): number {
+  return englishCollator.compare(left, right);
+}
+
+function compareStrokeText(left: string, right: string): number {
+  return strokeCollator.compare(left, right);
+}
+
+function isEnglishLearningTheme(value: string): boolean {
+  return /^[A-Za-z]/.test(value.trim());
+}
+
+function getQuestionLearningTheme(question: Question): string {
+  return (question.learningTheme || question.group).trim();
 }
 
 function formatYear(value: string): string {

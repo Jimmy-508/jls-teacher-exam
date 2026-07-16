@@ -5,7 +5,7 @@ import {
   QUESTION_BANK_TEMPLATE_HEADERS,
 } from './questionBankFields';
 import type { Question, QuestionType } from '../types/question';
-import { getActiveQuestionBank } from './questionBankStorageService';
+import { getActiveQuestions } from './questionBankStorageService';
 
 type CsvRow = Record<string, string>;
 export const CSV_ROW_NUMBER_FIELD = '__csvRowNumber';
@@ -290,8 +290,7 @@ export function toQuestion(row: CsvRow): Question {
 }
 
 export async function loadQuestions(): Promise<Question[]> {
-  const activeQuestionBank = await getActiveQuestionBank();
-  return parseCsv(activeQuestionBank.csvText).map(toQuestion);
+  return getActiveQuestions();
 }
 
 function findHeaderRecordIndex(records: string[]): number {

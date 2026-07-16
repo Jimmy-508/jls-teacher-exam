@@ -56,12 +56,13 @@ describe('wrongQuestionExportService', () => {
     expect(result).toHaveLength(1);
   });
 
-  it('sorts subject options by fixed JLS order while hiding missing subjects', () => {
+  it('sorts subject options by shared JLS subject order while hiding missing subjects', () => {
     const questions = [
       createQuestion('q1', '113', '國語文能力測驗', '國文', '1', CHOICE_QUESTION_TYPE),
-      createQuestion('q2', '113', '教育理念與實務', '理念', '2', CHOICE_QUESTION_TYPE),
-      createQuestion('q3', '113', '新科目', '新主題', '3', CHOICE_QUESTION_TYPE),
-      createQuestion('q4', '114', '課程教學與評量', '課程', '4', CHOICE_QUESTION_TYPE),
+      createQuestion('q2', '113', '教育原理與制度', '理念', '2', CHOICE_QUESTION_TYPE),
+      createQuestion('q3', '113', '青少年發展與輔導', '新主題', '3', CHOICE_QUESTION_TYPE),
+      createQuestion('q4', '114', '中等學校課程與教學', '課程', '4', CHOICE_QUESTION_TYPE),
+      createQuestion('q5', '113', '未分類科目', '新主題', '5', CHOICE_QUESTION_TYPE),
     ];
 
     const options = buildWrongQuestionFilterOptions(questions, {
@@ -70,12 +71,12 @@ describe('wrongQuestionExportService', () => {
       learningTheme: getAllFilterValue(),
     });
 
-    expect(options.subjects).toEqual([getAllFilterValue(), '教育理念與實務', '國語文能力測驗', '新科目']);
-    expect(options.subjects).not.toContain('課程教學與評量');
-    expect(['教育理念與實務', '課程教學與評量', '學習者發展與適性輔導', '國語文能力測驗'].sort(compareSubjects)).toEqual([
-      '教育理念與實務',
-      '課程教學與評量',
-      '學習者發展與適性輔導',
+    expect(options.subjects).toEqual([getAllFilterValue(), '青少年發展與輔導', '教育原理與制度', '未分類科目', '國語文能力測驗']);
+    expect(options.subjects).not.toContain('中等學校課程與教學');
+    expect(['國語文能力測驗', '教育原理與制度', '青少年發展與輔導', '中等學校課程與教學'].sort(compareSubjects)).toEqual([
+      '中等學校課程與教學',
+      '青少年發展與輔導',
+      '教育原理與制度',
       '國語文能力測驗',
     ]);
   });
@@ -100,6 +101,58 @@ describe('wrongQuestionExportService', () => {
 
     expect(options.years).toEqual([getAllFilterValue(), '115', '109', '108-2', '108-1', '106', '94']);
     expect(options.years).not.toContain('107');
+  });
+
+  it('lists only learning themes that have wrong choice questions', () => {
+    const questions = [
+      createQuestion('q1', '115', 'Subject', 'ThemeA', '1', CHOICE_QUESTION_TYPE),
+      createQuestion('q2', '115', 'Subject', 'ThemeB', '2', CHOICE_QUESTION_TYPE),
+      createQuestion('q3', '115', 'Subject', 'ThemeC', '3', CHOICE_QUESTION_TYPE),
+      createQuestion('q4', '115', 'Subject', 'ThemeD', '4', ESSAY_QUESTION_TYPE),
+    ];
+    const records = {
+      q1: createRecord('q1', 1, false),
+      q2: createRecord('q2', 0, true),
+      q3: createRecord('q3', 2, false),
+      q4: createRecord('q4', 3, false),
+    };
+
+    const options = buildWrongQuestionFilterOptions(
+      questions,
+      {
+        year: '115',
+        subject: 'Subject',
+        learningTheme: getAllFilterValue(),
+      },
+      records,
+    );
+
+    expect(options.learningThemes).toEqual([getAllFilterValue(), 'ThemeA', 'ThemeC']);
+    expect(options.learningThemes).not.toContain('ThemeB');
+    expect(options.learningThemes).not.toContain('ThemeD');
+  });
+
+  it('sorts wrong-question learning themes with all first, then English, then Chinese stroke order', () => {
+    const questions = [
+      createQuestion('q1', '115', 'Subject', '二主題', '1', CHOICE_QUESTION_TYPE),
+      createQuestion('q2', '115', 'Subject', 'beta', '2', CHOICE_QUESTION_TYPE),
+      createQuestion('q3', '115', 'Subject', '一主題', '3', CHOICE_QUESTION_TYPE),
+      createQuestion('q4', '115', 'Subject', 'Alpha', '4', CHOICE_QUESTION_TYPE),
+      createQuestion('q5', '115', 'Subject', '三主題', '5', CHOICE_QUESTION_TYPE),
+    ];
+    const records = Object.fromEntries(questions.map((question) => [question.id, createRecord(question.id, 1, false)]));
+
+    const options = buildWrongQuestionFilterOptions(
+      questions,
+      {
+        year: '115',
+        subject: 'Subject',
+        learningTheme: getAllFilterValue(),
+      },
+      records,
+    );
+
+    expect(options.learningThemes).toEqual([getAllFilterValue(), 'Alpha', 'beta', '一主題', '二主題', '三主題']);
   });
 
   it('filters wrong-question exports by exact session exam year', () => {

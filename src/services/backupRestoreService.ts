@@ -4,9 +4,8 @@ import {
   LEARNING_PROFILE_STORAGE_KEY,
   LEARNING_RECORDS_STORAGE_KEY,
 } from './learningEngine';
-import { parseCsv, toQuestion } from './csvService';
 import { reconcileLearningRecordsForQuestionBank, saveIsolatedLearningRecords } from './learningRecordReconciliationService';
-import { getActiveQuestionBank } from './questionBankStorageService';
+import { getActiveQuestions } from './questionBankStorageService';
 import { buildQuestionBankIdentity, buildQuestionIdentitySnapshots } from './questionBankIdentityService';
 import { JLS_IMPORTED_QUESTION_BANK_STORAGE_KEY, JLS_LEARNING_RECORDS_STORAGE_KEY } from './storageKeys';
 import { saveBlobWithPicker, type SaveBlobResult } from './fileSaveService';
@@ -75,8 +74,7 @@ async function buildBackupIdentityMetadata(now: Date): Promise<{
   allQuestionIdentities: NonNullable<JlsBackup['learningRecordQuestionIdentities']>;
 }> {
   try {
-    const activeQuestionBank = await getActiveQuestionBank();
-    const activeQuestions = parseCsv(activeQuestionBank.csvText).map(toQuestion);
+    const activeQuestions = await getActiveQuestions();
 
     return {
       questionBankIdentity: await buildQuestionBankIdentity(activeQuestions, now.toISOString()),
@@ -234,8 +232,7 @@ async function getRestorableStorage(backup: JlsBackup): Promise<Record<string, u
   const records = normalizeBackupLearningRecords(storage[LEARNING_RECORDS_STORAGE_KEY]);
 
   if (Object.keys(records).length > 0) {
-    const activeQuestionBank = await getActiveQuestionBank();
-    const activeQuestions = parseCsv(activeQuestionBank.csvText).map(toQuestion);
+    const activeQuestions = await getActiveQuestions();
     const reconciliation = await reconcileLearningRecordsForQuestionBank(records, activeQuestions);
     storage[LEARNING_RECORDS_STORAGE_KEY] = reconciliation.records;
     await saveIsolatedLearningRecords([...reconciliation.orphaned, ...reconciliation.conflicted]);

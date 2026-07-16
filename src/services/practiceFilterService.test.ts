@@ -74,24 +74,26 @@ describe('practiceFilterService', () => {
     ]);
   });
 
-  it('sorts subject options by the fixed teacher exam order and keeps only existing subjects', () => {
+  it('sorts subject options by JLS subject order and keeps only existing subjects', () => {
     const questions = [
       createQuestion({ id: 'Q1', year: '113', subject: '國語文能力測驗' }),
-      createQuestion({ id: 'Q2', year: '113', subject: '教育理念與實務' }),
-      createQuestion({ id: 'Q3', year: '113', subject: '學習者發展與適性輔導' }),
-      createQuestion({ id: 'Q4', year: '113', subject: '課程教學與評量' }),
-      createQuestion({ id: 'Q5', year: '113', subject: '新科目' }),
-      createQuestion({ id: 'Q6', year: '114', subject: '教育理念與實務' }),
+      createQuestion({ id: 'Q2', year: '113', subject: '教育原理與制度' }),
+      createQuestion({ id: 'Q3', year: '113', subject: '青少年發展與輔導' }),
+      createQuestion({ id: 'Q4', year: '113', subject: '中等學校課程與教學' }),
+      createQuestion({ id: 'Q5', year: '113', subject: '未分類科目' }),
+      createQuestion({ id: 'Q6', year: '114', subject: '教育原理與制度' }),
+      createQuestion({ id: 'Q7', year: '113', subject: '教育原理與制度' }),
+      createQuestion({ id: 'Q8', year: '113', subject: '' }),
     ];
 
     expect(buildPracticeFilterOptions(questions, '113').subjects).toEqual([
-      '教育理念與實務',
-      '課程教學與評量',
-      '學習者發展與適性輔導',
+      '中等學校課程與教學',
+      '青少年發展與輔導',
+      '教育原理與制度',
+      '未分類科目',
       '國語文能力測驗',
-      '新科目',
     ]);
-    expect(buildPracticeFilterOptions(questions, '114').subjects).toEqual(['教育理念與實務']);
+    expect(buildPracticeFilterOptions(questions, '114').subjects).toEqual(['教育原理與制度']);
   });
 
   it('filters practice questions by year, subject, core concept, and type as an intersection', () => {

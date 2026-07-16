@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../components/Modal';
-import { parseCsv, readQuestionBankCsvFile, toQuestion } from '../services/csvService';
+import { readQuestionBankCsvFile } from '../services/csvService';
 import {
   createJlsBackup,
   createRestorePreview,
@@ -10,13 +10,15 @@ import {
 } from '../services/backupRestoreService';
 import {
   getActiveQuestionBank,
+  getActiveQuestionBankMetadata,
+  getActiveQuestions,
   resetImportedQuestionBank,
-  saveImportedQuestionBank,
+  saveParsedImportedQuestionBank,
 } from '../services/questionBankStorageService';
 import { buildQuestionBankTemplateCsv } from '../services/questionBankTemplateService';
 import { buildQuestionIdentitySnapshots, type QuestionIdentitySnapshot } from '../services/questionBankIdentityService';
 import { reconcileLearningRecordsForQuestionBank, saveIsolatedLearningRecords } from '../services/learningRecordReconciliationService';
-import { validateQuestionBankCsv } from '../services/questionBankValidator';
+import { parseAndValidateQuestionBankCsv } from '../services/questionBankValidator';
 import { getDisplayName } from '../services/userSettingsService';
 import { saveBlobWithPicker, type SaveBlobResult } from '../services/fileSaveService';
 import {
@@ -35,8 +37,6 @@ import type { WrongQuestionFilters } from '../types/WrongQuestionExport';
 
 interface QuestionBankState {
   validation: QuestionBankValidationResult;
-  csvText: string;
-  questions: Question[];
   importedAt?: string;
   source: 'default' | 'imported';
 }
@@ -74,6 +74,7 @@ export default function QuestionBankPage() {
   const [backupStatus, setBackupStatus] = useState<ModalActionStatus>('idle');
   const [activeModal, setActiveModal] = useState<LibraryModal>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [wrongQuestionQuestions, setWrongQuestionQuestions] = useState<Question[]>([]);
   const [wrongQuestionFilters, setWrongQuestionFilters] = useState<WrongQuestionFilters>(INITIAL_WRONG_QUESTION_FILTERS);
   const [recordsByQuestionId, setRecordsByQuestionId] = useState<Record<string, LearningRecord>>({});
   const [questionIdentitiesById, setQuestionIdentitiesById] = useState<Record<string, QuestionIdentitySnapshot>>({});
@@ -85,16 +86,13 @@ export default function QuestionBankPage() {
 
     async function loadLibrary() {
       try {
-        const activeQuestionBank = await getActiveQuestionBank();
-        const validation = validateQuestionBankCsv(activeQuestionBank.csvText);
+        const metadata = (await getActiveQuestionBankMetadata()) ?? (await getActiveQuestionBank()).metadata;
 
         if (isActive) {
           setState({
-            validation,
-            csvText: activeQuestionBank.csvText,
-            questions: parseCsv(activeQuestionBank.csvText).map(toQuestion),
-            importedAt: activeQuestionBank.importedAt,
-            source: activeQuestionBank.source,
+            validation: metadata.validation,
+            importedAt: metadata.importedAt,
+            source: metadata.source,
           });
         }
       } catch (unknownError) {
@@ -110,12 +108,18 @@ export default function QuestionBankPage() {
   }, []);
 
   const wrongQuestionFilterOptions = useMemo(
-    () => buildWrongQuestionFilterOptions(state?.questions ?? [], wrongQuestionFilters),
-    [state?.questions, wrongQuestionFilters],
+    () =>
+      buildWrongQuestionFilterOptions(
+        wrongQuestionQuestions,
+        wrongQuestionFilters,
+        recordsByQuestionId,
+        questionIdentitiesById,
+      ),
+    [questionIdentitiesById, recordsByQuestionId, wrongQuestionQuestions, wrongQuestionFilters],
   );
   const wrongQuestionItems = useMemo(
-    () => filterWrongChoiceQuestions(state?.questions ?? [], recordsByQuestionId, wrongQuestionFilters, questionIdentitiesById),
-    [questionIdentitiesById, recordsByQuestionId, state?.questions, wrongQuestionFilters],
+    () => filterWrongChoiceQuestions(wrongQuestionQuestions, recordsByQuestionId, wrongQuestionFilters, questionIdentitiesById),
+    [questionIdentitiesById, recordsByQuestionId, wrongQuestionQuestions, wrongQuestionFilters],
   );
 
   async function handleImportCsv(file: File | undefined) {
@@ -128,33 +132,26 @@ export default function QuestionBankPage() {
 
     try {
       const csvText = await readQuestionBankCsvFile(file);
-      const validation = validateQuestionBankCsv(csvText);
+      const parsedQuestionBank = parseAndValidateQuestionBankCsv(csvText);
+      const { validation } = parsedQuestionBank;
 
       if (!validation.isValid) {
-        setState({
-          validation,
-          csvText,
-          questions: parseCsv(csvText).map(toQuestion),
-          importedAt: state?.importedAt,
-          source: state?.source ?? 'default',
-        });
+        setState((current) => (current ? { ...current, validation } : null));
         setImportMessage({ kind: 'error', text: `匯入失敗。驗證結果：${formatValidationCounts(validation)}` });
         return;
       }
 
-      await saveImportedQuestionBank(csvText);
+      const activeQuestionBank = await saveParsedImportedQuestionBank(csvText, parsedQuestionBank);
       setState({
-        validation,
-        csvText,
-        questions: parseCsv(csvText).map(toQuestion),
-        importedAt: new Date().toISOString(),
+        validation: activeQuestionBank.validation,
+        importedAt: activeQuestionBank.importedAt,
         source: 'imported',
       });
+      setWrongQuestionQuestions([]);
       setImportMessage({
         kind: 'success',
         text: `匯入成功！共 ${validation.summary.totalQuestions} 題、學習主題 ${validation.summary.learningThemeCount}、核心概念 ${validation.summary.knowledgeNodeCount}。`,
       });
-      window.dispatchEvent(new Event('jls-question-bank-updated'));
     } catch (unknownError) {
       setImportMessage({ kind: 'error', text: unknownError instanceof Error ? unknownError.message : '匯入題庫失敗。' });
     } finally {
@@ -166,14 +163,13 @@ export default function QuestionBankPage() {
 
   async function handleResetQuestionBank() {
     await resetImportedQuestionBank();
-    const activeQuestionBank = await getActiveQuestionBank();
+    const metadata = await getActiveQuestionBankMetadata();
     setState({
-      validation: validateQuestionBankCsv(activeQuestionBank.csvText),
-      csvText: activeQuestionBank.csvText,
-      questions: parseCsv(activeQuestionBank.csvText).map(toQuestion),
-      importedAt: activeQuestionBank.importedAt,
-      source: activeQuestionBank.source,
+      validation: metadata?.validation ?? (await getActiveQuestionBank()).validation,
+      importedAt: undefined,
+      source: 'default',
     });
+    setWrongQuestionQuestions([]);
     setStatusMessage('已切回預設題庫。');
   }
 
@@ -213,7 +209,8 @@ export default function QuestionBankPage() {
     setWrongQuestionModalMessageType('success');
     setWrongQuestionExportStatus('idle');
     setWrongQuestionFilters(INITIAL_WRONG_QUESTION_FILTERS);
-    const questions = state?.questions ?? [];
+    const questions = await getActiveQuestions();
+    setWrongQuestionQuestions(questions);
     const loadedRecords = await loadWrongQuestionRecords();
     const reconciledRecords = await reconcileLearningRecordsForQuestionBank(loadedRecords, questions);
     await saveIsolatedLearningRecords([...reconciledRecords.orphaned, ...reconciledRecords.conflicted]);
@@ -354,6 +351,7 @@ export default function QuestionBankPage() {
     setBackupModalMessageType('success');
     setBackupStatus('idle');
     setQuestionIdentitiesById({});
+    setWrongQuestionQuestions([]);
   }
 
   if (error) {

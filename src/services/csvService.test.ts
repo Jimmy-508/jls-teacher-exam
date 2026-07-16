@@ -1,15 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Question } from '../types/question';
 
-const activeQuestionBank = vi.hoisted(() => ({
-  value: {
-    csvText: '',
-    source: 'default' as 'default' | 'imported',
-    importedAt: undefined as string | undefined,
-  },
+const activeQuestions = vi.hoisted(() => ({
+  value: [] as Question[],
 }));
 
 vi.mock('./questionBankStorageService', () => ({
-  getActiveQuestionBank: vi.fn(async () => activeQuestionBank.value),
+  getActiveQuestions: vi.fn(async () => activeQuestions.value),
 }));
 
 import { loadQuestions, parseCsv, parseCsvWithHeaders, readQuestionBankCsvFile, toQuestion } from './csvService';
@@ -19,27 +16,19 @@ import {
   QUESTION_BANK_FIELDS,
   QUESTION_BANK_TEMPLATE_HEADERS,
 } from './questionBankFields';
-import { getActiveQuestionBank } from './questionBankStorageService';
+import { getActiveQuestions } from './questionBankStorageService';
 
 describe('csvService', () => {
   beforeEach(() => {
-    activeQuestionBank.value = {
-      csvText: createCsv('PUBLIC_Q1'),
-      source: 'default',
-      importedAt: undefined,
-    };
+    activeQuestions.value = parseCsv(createCsv('PUBLIC_Q1')).map(toQuestion);
   });
 
   it('loads questions from active imported question bank', async () => {
-    activeQuestionBank.value = {
-      csvText: createCsv('IMPORTED_Q1'),
-      importedAt: '2026-07-07T00:00:00.000Z',
-      source: 'imported',
-    };
+    activeQuestions.value = parseCsv(createCsv('IMPORTED_Q1')).map(toQuestion);
 
     const questions = await loadQuestions();
 
-    expect(getActiveQuestionBank).toHaveBeenCalled();
+    expect(getActiveQuestions).toHaveBeenCalled();
     expect(questions.map((question) => question.id)).toEqual(['IMPORTED_Q1']);
   });
 
