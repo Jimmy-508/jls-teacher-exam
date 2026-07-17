@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar';
 import QuestionCard from '../components/QuestionCard';
@@ -103,6 +103,22 @@ export function buildPracticeResultState(params: {
   };
 }
 
+export function updatePracticeSessionEssayCompletion(session: PracticeSession, questionId: string): PracticeSession {
+  const completedEssayQuestionIds = session.completedEssayQuestionIds ?? [];
+
+  if (completedEssayQuestionIds.includes(questionId)) {
+    return session;
+  }
+
+  const nextCompletedEssayQuestionIds = [...completedEssayQuestionIds, questionId];
+
+  return {
+    ...session,
+    completedEssayQuestionIds: nextCompletedEssayQuestionIds,
+    completedEssayCount: nextCompletedEssayQuestionIds.length,
+  };
+}
+
 export const practiceTypeOptions: Array<{ label: string; value: PracticeQuestionTypeFilter }> = [
   { label: '選擇題', value: 'choice' },
   { label: '非選題', value: 'essay' },
@@ -163,7 +179,7 @@ export default function PracticePage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
-  const [eliminationMessage, setEliminationMessage] = useState('');
+  const [eliminationMessage, setEliminationMessage] = useState<ReactNode>(null);
 
   useEffect(() => {
     setFilters((previousFilters) => ({
@@ -248,7 +264,7 @@ export default function PracticePage() {
         setExplanations({});
         setEssayAnswers({});
         setEssayFeedback({});
-        setEliminationMessage('');
+        setEliminationMessage(null);
       } catch (error: unknown) {
         if (isMounted) {
           setErrorMessage(error instanceof Error ? error.message : 'Practice 載入失敗。');
@@ -361,11 +377,36 @@ export default function PracticePage() {
           : answer.isCorrect
             ? remainingCount === 0
               ? '太棒了！本次抽選的錯題已全部消除。'
-              : `答對了！這一題已從錯題本移除，目前剩${remainingCount}題待消除。`
-            : '這一題仍未答對，會保留在待消除的錯題中。';
+              : (
+                  <span className="elimination-feedback">
+                    <span className="elimination-feedback__line">答對了！這一題已從錯題本移除。</span>
+                    <span className="elimination-feedback__line">目前剩{remainingCount}題待消除。</span>
+                  </span>
+                )
+            : (
+                <span className="elimination-feedback">
+                  <span className="elimination-feedback__line">這一題仍未答對…</span>
+                  <span className="elimination-feedback__line">會保留在待消除的錯題中。</span>
+                </span>
+              );
 
       setEliminationMessage(nextEliminationMessage);
     }
+  }
+
+  async function persistEssayCompletion(questionId: string) {
+    if (!practiceSession) {
+      return;
+    }
+
+    const nextSession = updatePracticeSessionEssayCompletion(practiceSession, questionId);
+
+    if (nextSession === practiceSession) {
+      return;
+    }
+
+    setPracticeSession(nextSession);
+    await save(ACTIVE_PRACTICE_SESSION_STORAGE_KEY, nextSession);
   }
 
   function handleSelectAnswer(choice: ChoiceKey) {
@@ -405,6 +446,7 @@ export default function PracticePage() {
         ...previousFeedback,
         [currentQuestion.id]: result,
       }));
+      void persistEssayCompletion(currentQuestion.id);
     } catch {
       setErrorMessage('產生作答回饋時發生錯誤。');
     } finally {
@@ -505,7 +547,7 @@ export default function PracticePage() {
     setEssayFeedback({});
     setCurrentIndex(0);
     setErrorMessage('');
-    setEliminationMessage('');
+    setEliminationMessage(null);
     await remove(ACTIVE_PRACTICE_SESSION_STORAGE_KEY);
   }
 
@@ -593,7 +635,7 @@ export default function PracticePage() {
       </details>
 
       {questions.length === 0 || !currentQuestion ? (
-        <section className="status-page">
+        <section className="practice-empty-state">
           <h1>目前沒有符合條件的題目。</h1>
           <p>{emptyPracticeMessage}</p>
         </section>

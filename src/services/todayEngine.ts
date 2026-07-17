@@ -114,39 +114,54 @@ export function getLearningJourney(
 ): LearningJourney {
   const dateKey = toDateKey(date);
   const sessionsToday = practiceSessions.filter((session) => toDateKey(new Date(session.startTime)) === dateKey);
-  const answeredToday = sessionsToday.reduce((sum, session) => sum + session.answers.length, 0);
+  const choiceAnsweredToday = sessionsToday.reduce((sum, session) => sum + session.answers.length, 0);
+  const essayAnsweredToday = sessionsToday.reduce((sum, session) => sum + getCompletedEssayCount(session), 0);
+  const answeredToday = choiceAnsweredToday + essayAnsweredToday;
   const correctToday = sessionsToday.reduce((sum, session) => sum + session.correctCount, 0);
   const wrongToday = sessionsToday.reduce((sum, session) => sum + session.wrongCount, 0);
-  const accuracyToday = answeredToday > 0 ? Math.round((correctToday / answeredToday) * 100) : 0;
+  const gradableChoiceCount = correctToday + wrongToday;
+  const accuracyToday = gradableChoiceCount > 0 ? Math.round((correctToday / gradableChoiceCount) * 100) : 0;
   const practicedTheme = learningThemes.find((theme) =>
-    theme.questionIds.some((questionId) => sessionsToday.some((session) => session.questionIds.includes(questionId))),
+    theme.questionIds.some((questionId) => sessionsToday.some((session) => isLearningActivitySession(session) && session.questionIds.includes(questionId))),
   );
+  const journeyItems: LearningJourney['items'] =
+    answeredToday > 0
+      ? [
+          {
+            label: '今日作答',
+            knowledgeNodeName: practicedTheme?.name,
+            value: `${answeredToday} 題`,
+          },
+        ]
+      : [
+          {
+            label: '尚未開始',
+            value: '完成一題練習後，JLS 會在這裡整理今日學習軌跡。',
+          },
+        ];
+
+  if (answeredToday > 0 && gradableChoiceCount > 0) {
+    journeyItems.push({
+      label: '選擇題正確率',
+      knowledgeNodeName: practicedTheme?.name,
+      value: `+${accuracyToday}%`,
+    });
+  }
+
+  if (answeredToday > 0 && essayAnsweredToday > 0) {
+    journeyItems.push({
+      label: choiceAnsweredToday > 0 ? '其中非選題' : '練習類型',
+      knowledgeNodeName: practicedTheme?.name,
+      value: choiceAnsweredToday > 0 ? `${essayAnsweredToday} 題` : '非選題',
+    });
+  }
 
   return {
     answeredToday,
     correctToday,
     wrongToday,
     accuracyToday,
-    items:
-      answeredToday > 0
-        ? [
-            {
-              label: '今日作答',
-              knowledgeNodeName: practicedTheme?.name,
-              value: `${answeredToday} 題`,
-            },
-            {
-              label: '正確率',
-              knowledgeNodeName: practicedTheme?.name,
-              value: `+${accuracyToday}%`,
-            },
-          ]
-        : [
-            {
-              label: '尚未開始',
-              value: '完成一題練習後，JLS 會在這裡整理今日學習軌跡。',
-            },
-          ],
+    items: journeyItems,
   };
 }
 
@@ -164,7 +179,7 @@ export function buildLearningCommit(params: {
 }): LearningCommit {
   const dateKey = toDateKey(params.date);
   const sessionsToday = params.practiceSessions.filter((session) => toDateKey(new Date(session.startTime)) === dateKey);
-  const answeredCount = sessionsToday.reduce((sum, session) => sum + session.answers.length, 0);
+  const answeredCount = sessionsToday.reduce((sum, session) => sum + session.answers.length + getCompletedEssayCount(session), 0);
   const correctCount = sessionsToday.reduce((sum, session) => sum + session.correctCount, 0);
   const wrongCount = sessionsToday.reduce((sum, session) => sum + session.wrongCount, 0);
 
@@ -175,7 +190,7 @@ export function buildLearningCommit(params: {
     wrongCount,
     knowledgeChanges: params.learningThemes
       .filter((theme) =>
-        theme.questionIds.some((questionId) => sessionsToday.some((session) => session.questionIds.includes(questionId))),
+        theme.questionIds.some((questionId) => sessionsToday.some((session) => isLearningActivitySession(session) && session.questionIds.includes(questionId))),
       )
       .map((theme) => ({
         knowledgeNodeName: theme.name,
@@ -290,4 +305,12 @@ function compareThemeOrder(left: LearningTheme, right: LearningTheme): number {
 
 function toDateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function getCompletedEssayCount(session: PracticeSession): number {
+  return session.completedEssayQuestionIds?.length ?? session.completedEssayCount ?? 0;
+}
+
+function isLearningActivitySession(session: PracticeSession): boolean {
+  return session.answers.length > 0 || getCompletedEssayCount(session) > 0;
 }

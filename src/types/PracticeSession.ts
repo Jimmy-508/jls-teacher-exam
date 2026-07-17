@@ -21,6 +21,8 @@ export interface PracticeSession {
   remainingQuestionIds?: string[];
   attemptCount?: number;
   averageFeedbackLevel?: 1 | 2 | 3 | 4 | 5;
+  completedEssayCount?: number;
+  completedEssayQuestionIds?: string[];
 }
 
 export interface PracticeSessionAnswerInput {

@@ -12,6 +12,7 @@ import {
   practiceCountOptions,
   sanitizeCustomQuestionCount,
   selectPracticeQuestions,
+  updatePracticeSessionEssayCompletion,
 } from './PracticePage';
 import { CHOICE_QUESTION_TYPE, ESSAY_QUESTION_TYPE } from '../services/questionBankFields';
 import type { PracticeSession } from '../types/PracticeSession';
@@ -275,6 +276,17 @@ describe('PracticePage controls', () => {
       gradableCount: 2,
       questionType: CHOICE_QUESTION_TYPE,
     });
+  });
+
+  it('does not count the same completed essay question twice', () => {
+    const firstSession = updatePracticeSessionEssayCompletion(createSession(), 'E1');
+    const secondSession = updatePracticeSessionEssayCompletion(firstSession, 'E1');
+
+    expect(firstSession.completedEssayCount).toBe(1);
+    expect(firstSession.completedEssayQuestionIds).toEqual(['E1']);
+    expect(secondSession).toBe(firstSession);
+    expect(secondSession.completedEssayCount).toBe(1);
+    expect(secondSession.completedEssayQuestionIds).toEqual(['E1']);
   });
 });
 

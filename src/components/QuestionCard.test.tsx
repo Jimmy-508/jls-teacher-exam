@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 import { CHOICE_QUESTION_TYPE } from '../services/questionBankFields';
 import type { PracticeAnswer, Question } from '../types/question';
@@ -20,6 +21,36 @@ describe('QuestionCard', () => {
     expect(html).not.toContain('答案正確！');
   });
 
+  it('can show wrong elimination success as two controlled lines', () => {
+    const html = renderQuestionCard(
+      { isCorrect: true },
+      <span className="elimination-feedback">
+        <span className="elimination-feedback__line">答對了！這一題已從錯題本移除。</span>
+        <span className="elimination-feedback__line">目前剩11題待消除。</span>
+      </span>,
+    );
+
+    expect(html).toContain('答對了！這一題已從錯題本移除。');
+    expect(html).toContain('目前剩11題待消除。');
+    expect(html.match(/elimination-feedback__line/g)).toHaveLength(2);
+    expect(html).not.toContain('答案正確！');
+  });
+
+  it('can show wrong elimination failure as two controlled lines', () => {
+    const html = renderQuestionCard(
+      { isCorrect: false },
+      <span className="elimination-feedback">
+        <span className="elimination-feedback__line">這一題仍未答對…</span>
+        <span className="elimination-feedback__line">會保留在待消除的錯題中。</span>
+      </span>,
+    );
+
+    expect(html).toContain('這一題仍未答對…');
+    expect(html).toContain('會保留在待消除的錯題中。');
+    expect(html.match(/elimination-feedback__line/g)).toHaveLength(2);
+    expect(html).not.toContain('答案錯誤，正確答案是 B。');
+  });
+
   it('shows a neutral message when a choice question has no valid standard answer', () => {
     const html = renderQuestionCard({
       correctAnswer: '',
@@ -35,7 +66,7 @@ describe('QuestionCard', () => {
   });
 });
 
-function renderQuestionCard(answerOverrides: Partial<PracticeAnswer>, answerHeadline?: string): string {
+function renderQuestionCard(answerOverrides: Partial<PracticeAnswer>, answerHeadline?: ReactNode): string {
   const answer: PracticeAnswer = {
     questionId: 'q1',
     selectedAnswer: 'A',

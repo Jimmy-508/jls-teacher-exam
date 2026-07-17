@@ -159,6 +159,76 @@ describe('todayEngine', () => {
     expect(journey.items.length).toBeGreaterThan(0);
     expect(journey.answeredToday).toBe(1);
   });
+
+  it('keeps existing choice-only journey statistics unchanged', () => {
+    const journey = getLearningJourney([createSession()], themes, new Date('2026-07-06T12:00:00+08:00'));
+
+    expect(journey.answeredToday).toBe(1);
+    expect(journey.correctToday).toBe(1);
+    expect(journey.wrongToday).toBe(0);
+    expect(journey.accuracyToday).toBe(100);
+    expect(journey.items).toEqual([
+      expect.objectContaining({ label: '今日作答', value: '1 題' }),
+      expect.objectContaining({ label: '選擇題正確率', value: '+100%' }),
+    ]);
+  });
+
+  it('counts completed essay practice without showing not-started state', () => {
+    const journey = getLearningJourney([createEssaySession(['q4'])], themes, new Date('2026-07-06T12:00:00+08:00'));
+
+    expect(journey.answeredToday).toBe(1);
+    expect(journey.correctToday).toBe(0);
+    expect(journey.wrongToday).toBe(0);
+    expect(journey.accuracyToday).toBe(0);
+    expect(journey.items).toEqual([
+      expect.objectContaining({ label: '今日作答', value: '1 題' }),
+      expect.objectContaining({ label: '練習類型', value: '非選題' }),
+    ]);
+    expect(journey.items.some((item) => item.label === '尚未開始')).toBe(false);
+    expect(journey.items.some((item) => item.label.includes('正確率'))).toBe(false);
+  });
+
+  it('keeps essay practice out of choice accuracy denominator', () => {
+    const choiceSession = createSession({
+      correctCount: 2,
+      wrongCount: 1,
+      answers: [
+        { questionId: 'q1', selectedAnswer: 'A', correctAnswer: 'A', isCorrect: true },
+        { questionId: 'q2', selectedAnswer: 'A', correctAnswer: 'A', isCorrect: true },
+        { questionId: 'q3', selectedAnswer: 'B', correctAnswer: 'A', isCorrect: false },
+      ],
+      questionIds: ['q1', 'q2', 'q3'],
+      totalQuestions: 3,
+    });
+    const essaySession = createEssaySession(['q4', 'q5']);
+    const journey = getLearningJourney([choiceSession, essaySession], themes, new Date('2026-07-06T12:00:00+08:00'));
+
+    expect(journey.answeredToday).toBe(5);
+    expect(journey.correctToday).toBe(2);
+    expect(journey.wrongToday).toBe(1);
+    expect(journey.accuracyToday).toBe(67);
+    expect(journey.items).toEqual([
+      expect.objectContaining({ label: '今日作答', value: '5 題' }),
+      expect.objectContaining({ label: '選擇題正確率', value: '+67%' }),
+      expect.objectContaining({ label: '其中非選題', value: '2 題' }),
+    ]);
+  });
+
+  it('does not count an essay session until an essay answer is submitted', () => {
+    const journey = getLearningJourney(
+      [createEssaySession([], { questionIds: ['q4'], totalQuestions: 1 })],
+      themes,
+      new Date('2026-07-06T12:00:00+08:00'),
+    );
+
+    expect(journey.answeredToday).toBe(0);
+    expect(journey.items).toEqual([
+      expect.objectContaining({
+        label: '尚未開始',
+        value: '完成一題練習後，JLS 會在這裡整理今日學習軌跡。',
+      }),
+    ]);
+  });
 });
 
 function createQuestion(id: string, subject: string, learningTheme: string): Question {
@@ -225,7 +295,7 @@ function createRecord(questionId: string, correctCount: number, wrongCount: numb
   };
 }
 
-function createSession(): PracticeSession {
+function createSession(overrides: Partial<PracticeSession> = {}): PracticeSession {
   return {
     id: 'session-1',
     startTime: '2026-07-06T09:00:00.000Z',
@@ -246,5 +316,23 @@ function createSession(): PracticeSession {
       },
     ],
     status: 'completed',
+    ...overrides,
+  };
+}
+
+function createEssaySession(completedEssayQuestionIds: string[], overrides: Partial<PracticeSession> = {}): PracticeSession {
+  return {
+    ...createSession({
+      id: 'essay-session',
+      totalQuestions: Math.max(completedEssayQuestionIds.length, 1),
+      correctCount: 0,
+      wrongCount: 0,
+      accuracy: 0,
+      questionIds: completedEssayQuestionIds.length > 0 ? completedEssayQuestionIds : ['q4'],
+      answers: [],
+      completedEssayQuestionIds,
+      completedEssayCount: completedEssayQuestionIds.length,
+      ...overrides,
+    }),
   };
 }

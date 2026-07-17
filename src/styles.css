@@ -318,6 +318,22 @@ p {
   font-size: 1.2rem;
 }
 
+.answer-panel__headline {
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.elimination-feedback {
+  display: grid;
+  gap: 2px;
+}
+
+.elimination-feedback__line {
+  display: block;
+}
+
 .answer-panel p {
   color: #52616b;
   line-height: 1.5;
@@ -965,6 +981,27 @@ p {
   margin-top: 12px;
 }
 
+.practice-empty-state {
+  padding: 16px;
+  border: 1px solid #d8e2dc;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  background: #ffffff;
+}
+
+.practice-empty-state h1 {
+  margin: 0;
+  color: #102a43;
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+
+.practice-empty-state p {
+  color: #52616b;
+  line-height: 1.6;
+}
+
 .validation-report .question-bank-issues {
   display: grid;
   gap: 10px;
@@ -1327,11 +1364,41 @@ p {
 .modal-form {
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .modal-form p {
   color: #52616b;
   line-height: 1.6;
+}
+
+.modal-form fieldset.form-field {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.date-range-fields {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.date-range-fields label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.date-range-fields input[type='date'] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .modal-actions {

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { getLearningThemeDisplayName } from '../services/displayDictionary';
 import type { ChoiceExplanation } from '../types/ChoiceExplanation';
 import type { ChoiceKey, PracticeAnswer, Question } from '../types/question';
@@ -14,7 +15,7 @@ interface QuestionCardProps {
   explanation?: ChoiceExplanation;
   isExplanationLoading?: boolean;
   onRequestExplanation: () => void;
-  answerHeadline?: string;
+  answerHeadline?: ReactNode;
 }
 
 const choices: Array<{ key: ChoiceKey; optionField: 'optionA' | 'optionB' | 'optionC' | 'optionD' }> = [
@@ -85,7 +86,7 @@ export default function QuestionCard({
 
       {answer ? (
         <div className={answerPanelClassName}>
-          <strong>{feedbackHeadline}</strong>
+          <strong className="answer-panel__headline">{feedbackHeadline}</strong>
           <p>我的答案：{answer.selectedAnswer}</p>
           <p>標準答案：{answer.isGradable === false ? '未提供' : answer.correctAnswer}</p>
           <button
