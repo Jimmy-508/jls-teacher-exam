@@ -1,10 +1,10 @@
 import type { LearningRecord } from '../types/LearningRecord';
 import type { Question } from '../types/question';
 import { sortTeacherExamSubjects } from '../constants/subjectOrder';
-import { getPracticeQuestionsByType, type PracticeQuestionTypeFilter } from './questionEngine';
+import { getPracticeQuestionsByType, normalizeChoiceKey, type PracticeQuestionTypeFilter } from './questionEngine';
 import { buildExamYearOptions } from './yearService';
 
-export type WrongQuestionFilter = 'all' | 'wrongOnly';
+export type WrongQuestionFilter = 'all' | 'wrongOnly' | 'wrongElimination';
 
 export interface PracticeFilters {
   year: string;
@@ -63,6 +63,8 @@ export function filterPracticeQuestions(
   typeFilter: PracticeQuestionTypeFilter,
   learningRecords: Record<string, LearningRecord> = {},
 ): Question[] {
+  const effectiveWrongQuestion = normalizeWrongQuestionFilterForType(filters.wrongQuestion, typeFilter);
+
   return getPracticeQuestionsByType(questions, typeFilter).filter((question) => {
     if (filters.year && question.year !== filters.year) {
       return false;
@@ -76,7 +78,7 @@ export function filterPracticeQuestions(
       return false;
     }
 
-    if (filters.wrongQuestion === 'wrongOnly' && !isWrongQuestion(question, learningRecords[question.id])) {
+    if (effectiveWrongQuestion !== 'all' && !isWrongQuestion(question, learningRecords[question.id])) {
       return false;
     }
 
@@ -84,7 +86,18 @@ export function filterPracticeQuestions(
   });
 }
 
+export function normalizeWrongQuestionFilterForType(
+  wrongQuestion: WrongQuestionFilter,
+  typeFilter: PracticeQuestionTypeFilter,
+): WrongQuestionFilter {
+  return typeFilter === 'choice' ? wrongQuestion : 'all';
+}
+
 export function isWrongQuestion(question: Question, record?: LearningRecord): boolean {
+  if (!normalizeChoiceKey(question.correctAnswer)) {
+    return false;
+  }
+
   const normalizedIsCorrect = question.isCorrect?.trim().toLowerCase() ?? '';
   const wrongCount = Number(question.wrongCount ?? 0);
 
@@ -116,6 +129,10 @@ export function summarizePracticeFilters(filters: PracticeFilters): string[] {
 
   if (filters.wrongQuestion === 'wrongOnly') {
     labels.push('僅錯題');
+  }
+
+  if (filters.wrongQuestion === 'wrongElimination') {
+    labels.push('錯題消除模式');
   }
 
   return labels;

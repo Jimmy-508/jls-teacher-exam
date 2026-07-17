@@ -8,6 +8,7 @@ import {
   getChoiceQuestions,
   getEssayQuestions,
   getPracticeQuestionsByType,
+  normalizeChoiceKey,
 } from './questionEngine';
 import { CHOICE_QUESTION_TYPE, ESSAY_QUESTION_TYPE } from './questionBankFields';
 import type { Question } from '../types/question';
@@ -65,6 +66,28 @@ describe('questionEngine', () => {
   it('checks answer correctness', () => {
     expect(checkAnswer(questions[0], 'A').isCorrect).toBe(true);
     expect(checkAnswer(questions[0], 'B').isCorrect).toBe(false);
+  });
+
+  it('normalizes standard answer keys from common CSV formats', () => {
+    expect(normalizeChoiceKey('A')).toBe('A');
+    expect(normalizeChoiceKey('(b)')).toBe('B');
+    expect(normalizeChoiceKey('（Ｃ）')).toBe('C');
+    expect(normalizeChoiceKey(' Ｄ ')).toBe('D');
+    expect(normalizeChoiceKey('')).toBeNull();
+    expect(normalizeChoiceKey('未提供')).toBeNull();
+    expect(normalizeChoiceKey('E')).toBeNull();
+  });
+
+  it('marks choice answers without a valid standard answer as ungradable', () => {
+    const answer = checkAnswer(createQuestion('q-ungraded', 'node', CHOICE_QUESTION_TYPE, ''), 'A');
+
+    expect(answer).toEqual({
+      questionId: 'q-ungraded',
+      selectedAnswer: 'A',
+      correctAnswer: '',
+      isCorrect: false,
+      isGradable: false,
+    });
   });
 
   it('draws questions by knowledge node', () => {

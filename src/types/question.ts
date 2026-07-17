@@ -50,4 +50,5 @@ export interface PracticeAnswer {
   selectedAnswer: ChoiceKey;
   correctAnswer: string;
   isCorrect: boolean;
+  isGradable?: boolean;
 }

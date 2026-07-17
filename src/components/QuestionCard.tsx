@@ -14,6 +14,7 @@ interface QuestionCardProps {
   explanation?: ChoiceExplanation;
   isExplanationLoading?: boolean;
   onRequestExplanation: () => void;
+  answerHeadline?: string;
 }
 
 const choices: Array<{ key: ChoiceKey; optionField: 'optionA' | 'optionB' | 'optionC' | 'optionD' }> = [
@@ -33,8 +34,19 @@ export default function QuestionCard({
   explanation,
   isExplanationLoading = false,
   onRequestExplanation,
+  answerHeadline,
 }: QuestionCardProps) {
   const hasAnswered = Boolean(answer);
+  const answerPanelClassName =
+    answer?.isGradable === false
+      ? 'answer-panel answer-panel--neutral'
+      : answer?.isCorrect
+        ? 'answer-panel answer-panel--correct'
+        : 'answer-panel answer-panel--wrong';
+  const feedbackHeadline =
+    answer?.isGradable === false
+      ? '本題未提供標準答案，本次作答不列入錯題紀錄。'
+      : answerHeadline ?? (answer?.isCorrect ? '答案正確！' : `答案錯誤，正確答案是 ${answer?.correctAnswer}。`);
 
   return (
     <section className="question-card">
@@ -72,10 +84,10 @@ export default function QuestionCard({
       </div>
 
       {answer ? (
-        <div className={answer.isCorrect ? 'answer-panel answer-panel--correct' : 'answer-panel answer-panel--wrong'}>
-          <strong>{answer.isCorrect ? '答案正確！' : `答案錯誤，正確答案是 ${answer.correctAnswer}。`}</strong>
+        <div className={answerPanelClassName}>
+          <strong>{feedbackHeadline}</strong>
           <p>我的答案：{answer.selectedAnswer}</p>
-          <p>標準答案：{answer.correctAnswer}</p>
+          <p>標準答案：{answer.isGradable === false ? '未提供' : answer.correctAnswer}</p>
           <button
             className="secondary-button"
             type="button"

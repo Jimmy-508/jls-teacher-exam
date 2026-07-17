@@ -14,9 +14,17 @@ import type {
   TodayViewModel,
 } from '../types/Today';
 import { compareSubjects } from './learningThemeService';
+import { CHOICE_QUESTION_TYPE } from './questionBankFields';
 
 const TODAY_QUESTION_LIMIT = 5;
 const MINUTES_PER_QUESTION = 2;
+
+export interface ThemeLearningStats {
+  practiceCount: number;
+  wrongCount: number;
+  averageFamiliarity: number;
+  lastReviewTime: number;
+}
 
 export function buildTodayViewModel(params: {
   questions: readonly Question[];
@@ -28,36 +36,31 @@ export function buildTodayViewModel(params: {
   recommendations: readonly unknown[];
   displayName?: string;
   date?: Date;
+  random?: () => number;
 }): TodayViewModel {
   const date = params.date ?? new Date();
-  const focus = getTodayFocus(params.questions, params.learningRecords, params.learningThemes);
+  const focus = getTodayFocus(params.questions, params.learningRecords, params.learningThemes, params.random);
 
   return {
     greeting: getGreeting(params.displayName, date),
     motto: getDailyMotto(date),
     focus,
     journey: getLearningJourney(params.practiceSessions, params.learningThemes, date),
-    recommendation: getTodayRecommendation(focus, params.learningThemes, params.learningRecords),
+    recommendation: getTodayRecommendation(focus, params.learningThemes, params.learningRecords, params.random),
   };
-}
-
-export interface ThemeLearningStats {
-  practiceCount: number;
-  wrongCount: number;
-  averageFamiliarity: number;
-  lastReviewTime: number;
 }
 
 export function getTodayFocus(
   questions: readonly Question[],
   learningRecords: readonly LearningRecord[],
   learningThemes: readonly LearningTheme[],
+  random: () => number = Math.random,
 ): TodayFocus | null {
   const themesWithQuestions = learningThemes
     .map((theme) => ({
       theme,
       questionIds: theme.questionIds.filter((questionId) =>
-        questions.some((question) => question.id === questionId && question.type === '選擇題'),
+        questions.some((question) => question.id === questionId && question.type === CHOICE_QUESTION_TYPE),
       ),
       stats: getThemeLearningStats(theme, learningRecords),
     }))
@@ -67,12 +70,41 @@ export function getTodayFocus(
     return null;
   }
 
-  const selectedTheme = selectLeastPracticedTheme(themesWithQuestions);
+  const selectedTheme = selectLeastPracticedTheme(themesWithQuestions, random);
   return toTodayFocus(
     selectedTheme.theme,
     selectedTheme.questionIds,
     selectedTheme.stats.practiceCount === 0 ? '尚未練習' : '目前練習次數最少',
   );
+}
+
+export function getTodayRecommendation(
+  focus: TodayFocus | null,
+  learningThemes: readonly LearningTheme[] = [],
+  learningRecords: readonly LearningRecord[] = [],
+  random: () => number = Math.random,
+): TodayRecommendation | null {
+  if (learningThemes.length === 0) {
+    return null;
+  }
+
+  const selectedTheme = selectRelativelyHighWrongTheme(
+    learningThemes.map((theme) => ({ theme, stats: getThemeLearningStats(theme, learningRecords) })),
+    random,
+  );
+  const stats = selectedTheme.stats;
+
+  return {
+    title: stats.wrongCount > 0 ? `優先複習：${selectedTheme.theme.name}` : `建議練習：${selectedTheme.theme.name}`,
+    description:
+      stats.wrongCount > 0
+        ? '這是目前累積錯誤次數較高的學習主題，建議再練習一次。'
+        : focus?.learningThemeName === selectedTheme.theme.name
+          ? '這個主題今天仍值得多練一輪，先把基礎穩住。'
+          : '這個主題的練習量或熟悉度仍有補強空間，建議安排一輪練習。',
+    targetKnowledgeNode: selectedTheme.theme.name,
+    targetQuestionIds: selectedTheme.theme.questionIds,
+  };
 }
 
 export function getLearningJourney(
@@ -99,7 +131,7 @@ export function getLearningJourney(
       answeredToday > 0
         ? [
             {
-              label: '完成',
+              label: '今日作答',
               knowledgeNodeName: practicedTheme?.name,
               value: `${answeredToday} 題`,
             },
@@ -112,34 +144,9 @@ export function getLearningJourney(
         : [
             {
               label: '尚未開始',
-              value: '完成今日焦點後，這裡會留下今天的學習軌跡。',
+              value: '完成一題練習後，JLS 會在這裡整理今日學習軌跡。',
             },
           ],
-  };
-}
-
-export function getTodayRecommendation(
-  focus: TodayFocus | null,
-  learningThemes: readonly LearningTheme[] = [],
-  learningRecords: readonly LearningRecord[] = [],
-): TodayRecommendation | null {
-  if (learningThemes.length === 0) {
-    return null;
-  }
-
-  const selectedTheme = selectMostWrongTheme(learningThemes, learningRecords);
-  const stats = getThemeLearningStats(selectedTheme, learningRecords);
-
-  return {
-    title: stats.wrongCount > 0 ? `優先複習：${selectedTheme.name}` : `建議練習：${selectedTheme.name}`,
-    description:
-      stats.wrongCount > 0
-        ? '這是目前累積錯誤次數最多的學習主題，建議再練習一次。'
-        : focus?.learningThemeName === selectedTheme.name
-          ? '先完成今日焦點，建立更完整的學習紀錄。'
-          : '目前沒有累積錯誤紀錄，建議從較需要練習的主題開始。',
-    targetKnowledgeNode: selectedTheme.name,
-    targetQuestionIds: selectedTheme.questionIds,
   };
 }
 
@@ -176,19 +183,6 @@ export function buildLearningCommit(params: {
   };
 }
 
-function toTodayFocus(theme: LearningTheme, questionIds: string[], reason: string): TodayFocus {
-  return {
-    knowledgeNodeId: theme.id,
-    learningThemeId: theme.id,
-    learningThemeName: theme.name,
-    knowledgeNodeName: theme.name,
-    questionIds,
-    questionCount: Math.min(questionIds.length, TODAY_QUESTION_LIMIT),
-    estimatedMinutes: Math.min(questionIds.length, TODAY_QUESTION_LIMIT) * MINUTES_PER_QUESTION,
-    reason,
-  };
-}
-
 export function getThemeLearningStats(theme: LearningTheme, learningRecords: readonly LearningRecord[]): ThemeLearningStats {
   const themeRecords = learningRecords.filter((record) => theme.questionIds.includes(record.questionId));
   const wrongCount = themeRecords.reduce((sum, record) => sum + record.wrongCount, 0);
@@ -207,17 +201,66 @@ export function getThemeLearningStats(theme: LearningTheme, learningRecords: rea
 
 export function selectLeastPracticedTheme<T extends { theme: LearningTheme; stats: ThemeLearningStats }>(
   themes: readonly T[],
+  random: () => number = Math.random,
 ): T {
-  return [...themes].sort(compareLeastPracticedTheme)[0];
+  const sortedThemes = [...themes].sort(compareLeastPracticedTheme);
+  const lowestPracticeCount = sortedThemes[0].stats.practiceCount;
+  const candidatePool = sortedThemes.filter((item) => item.stats.practiceCount <= lowestPracticeCount + 1).slice(0, 3);
+  const selectedIndex = Math.min(candidatePool.length - 1, Math.floor(random() * candidatePool.length));
+
+  return candidatePool[selectedIndex];
 }
 
 export function selectMostWrongTheme(
   learningThemes: readonly LearningTheme[],
   learningRecords: readonly LearningRecord[],
 ): LearningTheme {
-  return [...learningThemes]
-    .map((theme) => ({ theme, stats: getThemeLearningStats(theme, learningRecords) }))
-    .sort(compareMostWrongTheme)[0].theme;
+  return selectRelativelyHighWrongTheme(
+    learningThemes.map((theme) => ({ theme, stats: getThemeLearningStats(theme, learningRecords) })),
+  ).theme;
+}
+
+export function selectRelativelyHighWrongTheme<T extends { theme: LearningTheme; stats: ThemeLearningStats }>(
+  themes: readonly T[],
+  random: () => number = Math.random,
+): T {
+  const sortedThemes = [...themes].sort(compareMostWrongTheme);
+  const highestWrongCount = sortedThemes[0].stats.wrongCount;
+  const candidatePool =
+    highestWrongCount > 0
+      ? sortedThemes.filter((item) => item.stats.wrongCount >= Math.max(1, highestWrongCount - 2)).slice(0, 3)
+      : sortedThemes.slice(0, 3);
+  const selectedIndex = Math.min(candidatePool.length - 1, Math.floor(random() * candidatePool.length));
+
+  return candidatePool[selectedIndex];
+}
+
+export function getGreeting(displayName?: string, date = new Date()): string {
+  const hour = date.getHours();
+  const name = displayName?.trim() || 'Jarvis';
+
+  if (hour < 12) {
+    return `Good Morning, ${name}.`;
+  }
+
+  if (hour < 18) {
+    return `Good Afternoon, ${name}.`;
+  }
+
+  return `Good Evening, ${name}.`;
+}
+
+function toTodayFocus(theme: LearningTheme, questionIds: string[], reason: string): TodayFocus {
+  return {
+    knowledgeNodeId: theme.id,
+    learningThemeId: theme.id,
+    learningThemeName: theme.name,
+    knowledgeNodeName: theme.name,
+    questionIds,
+    questionCount: Math.min(questionIds.length, TODAY_QUESTION_LIMIT),
+    estimatedMinutes: Math.min(questionIds.length, TODAY_QUESTION_LIMIT) * MINUTES_PER_QUESTION,
+    reason,
+  };
 }
 
 function compareLeastPracticedTheme<T extends { theme: LearningTheme; stats: ThemeLearningStats }>(left: T, right: T): number {
@@ -243,21 +286,6 @@ function compareMostWrongTheme(
 
 function compareThemeOrder(left: LearningTheme, right: LearningTheme): number {
   return compareSubjects(left.subject, right.subject) || left.name.localeCompare(right.name, 'zh-Hant');
-}
-
-export function getGreeting(displayName?: string, date = new Date()): string {
-  const hour = date.getHours();
-  const name = displayName?.trim() || 'Jimmy';
-
-  if (hour < 12) {
-    return `Good Morning, ${name}.`;
-  }
-
-  if (hour < 18) {
-    return `Good Afternoon, ${name}.`;
-  }
-
-  return `Good Evening, ${name}.`;
 }
 
 function toDateKey(date: Date): string {

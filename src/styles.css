@@ -331,6 +331,10 @@ p {
   border-color: #c53030;
 }
 
+.answer-panel--neutral {
+  border-color: #718096;
+}
+
 .explanation-panel {
   border-top: 1px solid #d8e2dc;
   padding-top: 12px;

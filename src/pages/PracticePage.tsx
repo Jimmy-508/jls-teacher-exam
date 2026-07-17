@@ -26,15 +26,18 @@ import {
   buildPracticeFilterOptionsForFilters,
   filterPracticeQuestions,
   hasActivePracticeFilters,
+  normalizeWrongQuestionFilterForType,
   summarizePracticeFilters,
   type PracticeFilters,
 } from '../services/practiceFilterService';
 import { analyzeSmartFeedback } from '../services/smartFeedback/SmartFeedbackEngine';
+import { calculateAverageFeedbackLevel } from '../services/smartFeedback/feedbackLevel';
 import {
   checkAnswer,
   drawPracticeQuestions,
   drawPracticeQuestionsByIds,
   drawPracticeQuestionsByLearningTheme,
+  normalizeChoiceKey,
   type PracticeQuestionCount,
   type PracticeQuestionTypeFilter,
 } from '../services/questionEngine';
@@ -45,11 +48,15 @@ import type { ChoiceExplanation } from '../types/ChoiceExplanation';
 import type { LearningRecord } from '../types/LearningRecord';
 import type { PracticeSession } from '../types/PracticeSession';
 import type { SmartFeedbackResult } from '../types/SmartFeedback';
-import type { ChoiceKey, PracticeAnswer, Question } from '../types/question';
+import type { ChoiceKey, PracticeAnswer, Question, QuestionType } from '../types/question';
 
 interface ResultState {
   totalCount: number;
   correctCount: number;
+  wrongCount: number;
+  gradableCount: number;
+  questionType?: QuestionType;
+  averageFeedbackLevel?: 1 | 2 | 3 | 4 | 5;
 }
 
 interface PracticeLocationState {
@@ -60,6 +67,40 @@ interface PracticeLocationState {
   questionIds?: string[];
   fromToday?: boolean;
   fromTodayRecommendation?: boolean;
+}
+
+export function buildPracticeResultState(params: {
+  questions: readonly Question[];
+  answers: readonly PracticeAnswer[];
+  essayFeedback: Record<string, SmartFeedbackResult>;
+  questionType: PracticeQuestionTypeFilter;
+}): ResultState {
+  if (params.questionType === 'essay') {
+    const feedbackLevels = params.questions
+      .map((question) => params.essayFeedback[question.id]?.level)
+      .filter((level): level is 1 | 2 | 3 | 4 | 5 => typeof level === 'number');
+    const averageFeedbackLevel = calculateAverageFeedbackLevel(feedbackLevels);
+
+    return {
+      totalCount: params.questions.length,
+      correctCount: 0,
+      wrongCount: 0,
+      gradableCount: 0,
+      questionType: ESSAY_QUESTION_TYPE,
+      averageFeedbackLevel: averageFeedbackLevel ?? undefined,
+    };
+  }
+
+  const gradableAnswers = params.answers.filter((answer) => answer.isGradable !== false);
+  const correctCount = gradableAnswers.filter((answer) => answer.isCorrect).length;
+
+  return {
+    totalCount: params.questions.length,
+    correctCount,
+    wrongCount: gradableAnswers.length - correctCount,
+    gradableCount: gradableAnswers.length,
+    questionType: CHOICE_QUESTION_TYPE,
+  };
 }
 
 export const practiceTypeOptions: Array<{ label: string; value: PracticeQuestionTypeFilter }> = [
@@ -122,6 +163,7 @@ export default function PracticePage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [eliminationMessage, setEliminationMessage] = useState('');
 
   useEffect(() => {
     setFilters((previousFilters) => ({
@@ -181,7 +223,12 @@ export default function PracticePage() {
           return;
         }
 
-        const session = restoredSession ?? createPracticeSession(practiceQuestions.map((question) => question.id));
+        const session =
+          restoredSession ??
+          createPracticeSession(
+            practiceQuestions.map((question) => question.id),
+            filters.wrongQuestion === 'wrongElimination' && typeFilter === 'choice' ? 'wrongElimination' : 'standard',
+          );
         const initializedRecords = ensureLearningRecords(savedRecords, practiceQuestions);
 
         await save(LEARNING_RECORDS_STORAGE_KEY, initializedRecords);
@@ -201,6 +248,7 @@ export default function PracticePage() {
         setExplanations({});
         setEssayAnswers({});
         setEssayFeedback({});
+        setEliminationMessage('');
       } catch (error: unknown) {
         if (isMounted) {
           setErrorMessage(error instanceof Error ? error.message : 'Practice 載入失敗。');
@@ -259,21 +307,37 @@ export default function PracticePage() {
     const savedRecords = (await load<Record<string, LearningRecord>>(LEARNING_RECORDS_STORAGE_KEY)) ?? {};
     const nextRecord = updateLearningRecord(savedRecords[answer.questionId], answer);
     const answeredQuestion = questions.find((question) => question.id === answer.questionId);
+    const shouldClearWrongCount =
+      answer.isGradable === false ||
+      (answeredQuestion?.type === CHOICE_QUESTION_TYPE && !normalizeChoiceKey(answeredQuestion.correctAnswer)) ||
+      (practiceSession.mode === 'wrongElimination' && answer.isCorrect);
     const recordWithIdentity: LearningRecord = answeredQuestion
       ? {
           ...nextRecord,
+          wrongCount: shouldClearWrongCount ? 0 : nextRecord.wrongCount,
           questionIdentity: {
             identityVersion: 1,
             logicalKey: buildQuestionLogicalKey(answeredQuestion),
             contentHash: await buildQuestionContentHash(answeredQuestion),
           },
         }
-      : nextRecord;
+      : shouldClearWrongCount
+        ? { ...nextRecord, wrongCount: 0 }
+        : nextRecord;
     const nextRecords = {
       ...savedRecords,
       [answer.questionId]: recordWithIdentity,
     };
-    const nextSession = updatePracticeSessionAnswer(practiceSession, answer);
+    const answeredRemainingQuestionIds = practiceSession.remainingQuestionIds ?? practiceSession.questionIds;
+    const nextRemainingQuestionIds =
+      practiceSession.mode === 'wrongElimination' && answer.isCorrect
+        ? answeredRemainingQuestionIds.filter((questionId) => questionId !== answer.questionId)
+        : answeredRemainingQuestionIds;
+    const nextSession = {
+      ...updatePracticeSessionAnswer(practiceSession, answer),
+      remainingQuestionIds: practiceSession.mode === 'wrongElimination' ? nextRemainingQuestionIds : practiceSession.remainingQuestionIds,
+      attemptCount: practiceSession.mode === 'wrongElimination' ? (practiceSession.attemptCount ?? 0) + 1 : practiceSession.attemptCount,
+    };
     const learningProfile = calculateLearningProfile(Object.values(nextRecords), recordWithIdentity.lastReview);
 
     await save(LEARNING_RECORDS_STORAGE_KEY, nextRecords);
@@ -284,10 +348,24 @@ export default function PracticePage() {
       await save(LAST_PRACTICE_SESSION_STORAGE_KEY, nextSession);
     }
 
-    updateQuestionProgressState(answer);
+    updateQuestionProgressState(answer, shouldClearWrongCount);
     setPracticeSession(nextSession);
     setAnswers(nextSession.answers);
     setLearningRecords(nextRecords);
+
+    if (practiceSession.mode === 'wrongElimination') {
+      const remainingCount = nextRemainingQuestionIds.length;
+      const nextEliminationMessage =
+        answer.isGradable === false
+          ? '本題未提供標準答案，本次作答不列入錯題紀錄。'
+          : answer.isCorrect
+            ? remainingCount === 0
+              ? '太棒了！本次抽選的錯題已全部消除。'
+              : `答對了！這一題已從錯題本移除，目前剩${remainingCount}題待消除。`
+            : '這一題仍未答對，會保留在待消除的錯題中。';
+
+      setEliminationMessage(nextEliminationMessage);
+    }
   }
 
   function handleSelectAnswer(choice: ChoiceKey) {
@@ -342,12 +420,22 @@ export default function PracticePage() {
     const isLastQuestion = currentIndex === questions.length - 1;
 
     if (isLastQuestion) {
-      const correctCount = answers.filter((answer) => answer.isCorrect).length;
-      const resultState: ResultState = {
-        totalCount: questions.length,
-        correctCount,
+      const resultState = buildPracticeResultState({
+        questions,
+        answers,
+        essayFeedback,
+        questionType: typeFilter,
+      });
+      const completedSession: PracticeSession = {
+        ...practiceSession,
+        status: 'completed',
+        endTime: new Date().toISOString(),
+        averageFeedbackLevel: resultState.averageFeedbackLevel ?? practiceSession.averageFeedbackLevel,
       };
 
+      setPracticeSession(completedSession);
+      void save(LAST_PRACTICE_SESSION_STORAGE_KEY, completedSession);
+      void remove(ACTIVE_PRACTICE_SESSION_STORAGE_KEY);
       navigate('/result', { state: resultState });
       return;
     }
@@ -389,6 +477,9 @@ export default function PracticePage() {
     await resetCurrentPracticeState();
     setQuestionCount(DEFAULT_QUESTION_COUNT_BY_TYPE[nextTypeFilter]);
     setQuestionCountMode('preset');
+    if (normalizeWrongQuestionFilterForType(filters.wrongQuestion, nextTypeFilter) !== filters.wrongQuestion) {
+      setFilters((current) => ({ ...current, wrongQuestion: 'all' }));
+    }
     setTypeFilter(nextTypeFilter);
   }
 
@@ -414,17 +505,18 @@ export default function PracticePage() {
     setEssayFeedback({});
     setCurrentIndex(0);
     setErrorMessage('');
+    setEliminationMessage('');
     await remove(ACTIVE_PRACTICE_SESSION_STORAGE_KEY);
   }
 
-  function updateQuestionProgressState(answer: PracticeAnswer) {
+  function updateQuestionProgressState(answer: PracticeAnswer, clearWrongCount = false) {
     const now = new Date();
     updateQuestionState(answer.questionId, (question) => ({
       ...question,
       myAnswer: answer.selectedAnswer,
-      isCorrect: answer.isCorrect ? '是' : '否',
+      isCorrect: answer.isGradable === false ? '' : answer.isCorrect ? '是' : '否',
       familiarity: String(calculateNextQuestionFamiliarity(question.familiarity, answer.isCorrect)),
-      wrongCount: String(calculateNextQuestionWrongCount(question.wrongCount, answer.isCorrect)),
+      wrongCount: String(clearWrongCount ? 0 : calculateNextQuestionWrongCount(question.wrongCount, answer.isCorrect)),
       drawn: '是',
       lastReview: toDateString(now),
       nextReview: toDateString(addDays(now, 1)),
@@ -483,7 +575,12 @@ export default function PracticePage() {
           <strong>{settingsSummary}</strong>
         </summary>
         <div className="practice-controls">
-          <PracticeFilterSelector options={filterOptions} value={filters} onChange={(value) => void handleFiltersChange(value)} />
+          <PracticeFilterSelector
+            options={filterOptions}
+            typeFilter={typeFilter}
+            value={filters}
+            onChange={(value) => void handleFiltersChange(value)}
+          />
           <PracticeTypeSelector value={typeFilter} onChange={(value) => void handlePracticeTypeChange(value)} />
           <PracticeCountSelector
             maxCount={Math.max(eligibleQuestionCount, 1)}
@@ -502,7 +599,18 @@ export default function PracticePage() {
         </section>
       ) : (
         <>
-          <ProgressBar current={currentIndex + 1} total={questions.length} />
+          {practiceSession?.mode === 'wrongElimination' ? (
+            <ProgressBar
+              current={(practiceSession.remainingQuestionIds ?? practiceSession.questionIds).length}
+              total={practiceSession.initialQuestionIds?.length ?? practiceSession.questionIds.length}
+              mode="remaining"
+              label={`剩餘 ${(practiceSession.remainingQuestionIds ?? practiceSession.questionIds).length} / ${
+                practiceSession.initialQuestionIds?.length ?? practiceSession.questionIds.length
+              } 題`}
+            />
+          ) : (
+            <ProgressBar current={currentIndex + 1} total={questions.length} />
+          )}
           {isEssayQuestion ? (
             <EssayPracticeCard
               feedback={currentEssayFeedback}
@@ -531,6 +639,7 @@ export default function PracticePage() {
               explanation={currentExplanation}
               isExplanationLoading={isExplanationLoading}
               onRequestExplanation={handleRequestExplanation}
+              answerHeadline={practiceSession?.mode === 'wrongElimination' && currentAnswer ? eliminationMessage : undefined}
             />
           )}
         </>
@@ -607,10 +716,12 @@ function getEmptyPracticeMessage(typeFilter: PracticeQuestionTypeFilter, request
 
 export function PracticeFilterSelector({
   options,
+  typeFilter,
   value,
   onChange,
 }: {
   options: { years: string[]; subjects: string[]; coreConcepts: string[] };
+  typeFilter: PracticeQuestionTypeFilter;
   value: PracticeFilters;
   onChange: (value: PracticeFilters) => void;
 }) {
@@ -657,12 +768,22 @@ export function PracticeFilterSelector({
           onChange={(event) =>
             onChange({
               ...value,
-              wrongQuestion: event.target.value === 'wrongOnly' ? 'wrongOnly' : 'all',
+              wrongQuestion:
+                typeFilter !== 'choice'
+                  ? 'all'
+                  : event.target.value === 'wrongOnly' || event.target.value === 'wrongElimination'
+                  ? event.target.value
+                  : 'all',
             })
           }
         >
           <option value="all">全部題目</option>
-          <option value="wrongOnly">僅錯題</option>
+          <option value="wrongOnly" disabled={typeFilter !== 'choice'}>
+            僅錯題
+          </option>
+          <option value="wrongElimination" disabled={typeFilter !== 'choice'}>
+            錯題消除模式
+          </option>
         </select>
       </label>
     </fieldset>

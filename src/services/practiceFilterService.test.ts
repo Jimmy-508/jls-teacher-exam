@@ -7,6 +7,7 @@ import {
   buildPracticeFilterOptionsForFilters,
   filterPracticeQuestions,
   isWrongQuestion,
+  normalizeWrongQuestionFilterForType,
   sortCoreConcepts,
 } from './practiceFilterService';
 
@@ -146,6 +147,20 @@ describe('practiceFilterService', () => {
     );
   });
 
+  it('does not treat choice questions without a valid standard answer as wrong questions', () => {
+    const question = createQuestion({ id: 'Q-invalid', correctAnswer: '', isCorrect: '否', wrongCount: '3' });
+
+    expect(isWrongQuestion(question, createLearningRecord({ questionId: question.id, wrongCount: 2, lastCorrect: false }))).toBe(false);
+    expect(
+      filterPracticeQuestions(
+        [question],
+        { ...DEFAULT_PRACTICE_FILTERS, wrongQuestion: 'wrongOnly' },
+        'choice',
+        { [question.id]: createLearningRecord({ questionId: question.id, wrongCount: 2, lastCorrect: false }) },
+      ),
+    ).toHaveLength(0);
+  });
+
   it('keeps only wrong questions when wrong-only filter is enabled', () => {
     const questions = [
       createQuestion({ id: 'Q1', isCorrect: '是', wrongCount: '0' }),
@@ -161,6 +176,18 @@ describe('practiceFilterService', () => {
     );
 
     expect(result.map((question) => question.id)).toEqual(['Q2', 'Q3']);
+  });
+
+  it('treats wrong filters as all questions for essay practice', () => {
+    expect(normalizeWrongQuestionFilterForType('wrongOnly', 'essay')).toBe('all');
+    expect(normalizeWrongQuestionFilterForType('wrongElimination', 'essay')).toBe('all');
+
+    const questions = [
+      createQuestion({ id: 'E1', type: '非選題', isCorrect: '是', wrongCount: '0' }),
+      createQuestion({ id: 'E2', type: '非選題', isCorrect: '是', wrongCount: '0' }),
+    ];
+
+    expect(filterPracticeQuestions(questions, { ...DEFAULT_PRACTICE_FILTERS, wrongQuestion: 'wrongOnly' }, 'essay')).toHaveLength(2);
   });
 });
 

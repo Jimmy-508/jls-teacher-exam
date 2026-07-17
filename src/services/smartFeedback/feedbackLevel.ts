@@ -3,7 +3,6 @@ import type { ConceptEvidence } from '../../types/SmartFeedback';
 export function calculateFeedbackLevel({
   coveredConcepts,
   missingConcepts,
-  matchedBonusConcepts,
   matchedKeywords,
 }: {
   coveredConcepts: readonly ConceptEvidence[];
@@ -28,19 +27,31 @@ export function calculateFeedbackLevel({
   return 3;
 }
 
+export function calculateAverageFeedbackLevel(
+  levels: readonly number[],
+): 1 | 2 | 3 | 4 | 5 | null {
+  if (levels.length === 0) {
+    return null;
+  }
+
+  const average = levels.reduce((sum, level) => sum + level, 0) / levels.length;
+  const rounded = Math.round(average);
+  return Math.max(1, Math.min(5, rounded)) as 1 | 2 | 3 | 4 | 5;
+}
+
 export function getFeedbackSummary(level: 1 | 2 | 3 | 4 | 5): string {
   switch (level) {
     case 5:
-      return '核心概念完整，回答相當完整。';
+      return '核心概念完整，答案已涵蓋主要重點。';
     case 4:
-      return '概念大致正確，但仍缺少部分重要重點。';
+      return '概念大致完整，可再補充少量支持內容。';
     case 3:
-      return '方向正確，但建議再補充核心概念。';
+      return '已有正確方向，但仍缺少重要核心概念。';
     case 2:
-      return '目前僅提及部分概念，建議重新整理重點。';
+      return '只有少量相關線索，尚不足以確認主要概念。';
     case 1:
     default:
-      return '尚未回答到本題核心概念，建議重新閱讀觀念後再作答。';
+      return '目前尚未看出明確核心概念，建議先對照參考答案修正。';
   }
 }
 

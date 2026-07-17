@@ -38,7 +38,7 @@ function normalizeSubjectName(value: string): string {
 }
 
 function getSpecialSubjectRank(value: string): number {
-  if (CHINESE_LANGUAGE_SUBJECT_NAMES.includes(value as (typeof CHINESE_LANGUAGE_SUBJECT_NAMES)[number])) {
+  if (isChineseLanguageSubject(value)) {
     return 2;
   }
 
@@ -47,4 +47,9 @@ function getSpecialSubjectRank(value: string): number {
   }
 
   return 0;
+}
+
+export function isChineseLanguageSubject(subject: string): boolean {
+  const normalized = subject.trim();
+  return normalized.includes('國文') || normalized.includes('國語文');
 }

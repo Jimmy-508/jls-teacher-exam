@@ -16,6 +16,7 @@ import {
   saveParsedImportedQuestionBank,
 } from '../services/questionBankStorageService';
 import { buildQuestionBankTemplateCsv } from '../services/questionBankTemplateService';
+import { formatLocalDateKey } from '../services/dateService';
 import { buildQuestionIdentitySnapshots, type QuestionIdentitySnapshot } from '../services/questionBankIdentityService';
 import { reconcileLearningRecordsForQuestionBank, saveIsolatedLearningRecords } from '../services/learningRecordReconciliationService';
 import { parseAndValidateQuestionBankCsv } from '../services/questionBankValidator';
@@ -27,6 +28,7 @@ import {
   exportWrongQuestionPdf,
   filterWrongChoiceQuestions,
   getAllFilterValue,
+  getWrongQuestionDateFilterError,
   loadWrongQuestionRecords,
 } from '../services/wrongQuestionExportService';
 import type { JlsBackup, RestorePreview } from '../types/JlsBackup';
@@ -51,11 +53,16 @@ type ActionMessage = {
 
 const CSV_TEMPLATE_FILENAME = 'JLS_question_template.csv';
 const ALL = getAllFilterValue();
-const INITIAL_WRONG_QUESTION_FILTERS: WrongQuestionFilters = {
-  year: ALL,
-  subject: ALL,
-  learningTheme: ALL,
-};
+function createInitialWrongQuestionFilters(): WrongQuestionFilters {
+  const today = formatLocalDateKey();
+  return {
+    year: ALL,
+    subject: ALL,
+    learningTheme: ALL,
+    startDate: today,
+    endDate: today,
+  };
+}
 
 export default function QuestionBankPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -75,7 +82,7 @@ export default function QuestionBankPage() {
   const [activeModal, setActiveModal] = useState<LibraryModal>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [wrongQuestionQuestions, setWrongQuestionQuestions] = useState<Question[]>([]);
-  const [wrongQuestionFilters, setWrongQuestionFilters] = useState<WrongQuestionFilters>(INITIAL_WRONG_QUESTION_FILTERS);
+  const [wrongQuestionFilters, setWrongQuestionFilters] = useState<WrongQuestionFilters>(createInitialWrongQuestionFilters);
   const [recordsByQuestionId, setRecordsByQuestionId] = useState<Record<string, LearningRecord>>({});
   const [questionIdentitiesById, setQuestionIdentitiesById] = useState<Record<string, QuestionIdentitySnapshot>>({});
   const [restorePreview, setRestorePreview] = useState<RestorePreview | null>(null);
@@ -121,6 +128,7 @@ export default function QuestionBankPage() {
     () => filterWrongChoiceQuestions(wrongQuestionQuestions, recordsByQuestionId, wrongQuestionFilters, questionIdentitiesById),
     [questionIdentitiesById, recordsByQuestionId, wrongQuestionQuestions, wrongQuestionFilters],
   );
+  const wrongQuestionDateFilterError = getWrongQuestionDateFilterError(wrongQuestionFilters);
 
   async function handleImportCsv(file: File | undefined) {
     if (!file) {
@@ -212,7 +220,7 @@ export default function QuestionBankPage() {
     setWrongQuestionModalMessage('');
     setWrongQuestionModalMessageType('success');
     setWrongQuestionExportStatus('idle');
-    setWrongQuestionFilters(INITIAL_WRONG_QUESTION_FILTERS);
+    setWrongQuestionFilters(createInitialWrongQuestionFilters());
     setIsBusy(true);
 
     try {
@@ -252,7 +260,7 @@ export default function QuestionBankPage() {
 
     try {
       const displayName = await getDisplayName();
-      const model = buildWrongQuestionPdfModel({ displayName, items: wrongQuestionItems });
+      const model = buildWrongQuestionPdfModel({ displayName, items: wrongQuestionItems, filters: wrongQuestionFilters });
       const result = await exportWrongQuestionPdf(model);
 
       if (result === 'cancelled') {
@@ -470,7 +478,7 @@ export default function QuestionBankPage() {
               <span>年度</span>
               <select
                 value={wrongQuestionFilters.year}
-                onChange={(event) => setWrongQuestionFilters({ year: event.target.value, subject: ALL, learningTheme: ALL })}
+                onChange={(event) => setWrongQuestionFilters((current) => ({ ...current, year: event.target.value, subject: ALL, learningTheme: ALL }))}
               >
                 {wrongQuestionFilterOptions.years.map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
@@ -495,7 +503,29 @@ export default function QuestionBankPage() {
                 {wrongQuestionFilterOptions.learningThemes.map((theme) => <option key={theme} value={theme}>{theme}</option>)}
               </select>
             </label>
+            <fieldset className="form-field">
+              <legend>作答日期</legend>
+              <div className="date-range-fields">
+                <label>
+                  <span>起</span>
+                  <input
+                    type="date"
+                    value={wrongQuestionFilters.startDate}
+                    onChange={(event) => setWrongQuestionFilters((current) => ({ ...current, startDate: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span>迄</span>
+                  <input
+                    type="date"
+                    value={wrongQuestionFilters.endDate}
+                    onChange={(event) => setWrongQuestionFilters((current) => ({ ...current, endDate: event.target.value }))}
+                  />
+                </label>
+              </div>
+            </fieldset>
             <p>符合條件的錯題共 {wrongQuestionItems.length} 題</p>
+            {wrongQuestionDateFilterError ? <p className="form-error">{wrongQuestionDateFilterError}</p> : null}
             {wrongQuestionItems.length === 0 ? <p className="form-error">目前沒有符合條件的錯題。</p> : null}
             {wrongQuestionModalMessage ? (
               <p className={wrongQuestionModalMessageType === 'success' ? 'form-status' : 'form-error'}>
@@ -509,7 +539,12 @@ export default function QuestionBankPage() {
               {wrongQuestionExportStatus === 'success' ? (
                 <button className="primary-button" type="button" onClick={closeModal}>完成</button>
               ) : (
-                <button className="primary-button" disabled={isBusy || wrongQuestionItems.length === 0} type="button" onClick={() => void handleExportWrongQuestions()}>
+                <button
+                  className="primary-button"
+                  disabled={isBusy || wrongQuestionItems.length === 0 || Boolean(wrongQuestionDateFilterError)}
+                  type="button"
+                  onClick={() => void handleExportWrongQuestions()}
+                >
                   {wrongQuestionExportStatus === 'processing' ? '正在產生 PDF...' : '匯出 PDF'}
                 </button>
               )}

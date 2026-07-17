@@ -12,6 +12,7 @@ export const LAST_PRACTICE_SESSION_STORAGE_KEY = 'jtep.lastPracticeSession.v1';
 
 const MIN_FAMILIARITY = 0;
 const MAX_FAMILIARITY = 4;
+const MAX_ATTEMPT_RECORDS = 200;
 
 export interface AnswerAnalysisLearningRecordUpdate {
   mastered: string[];
@@ -67,6 +68,28 @@ export function calculateQuestionStatus(record?: LearningRecord): QuestionStatus
 export function updateLearningRecord(record: LearningRecord | undefined, answer: PracticeAnswer): LearningRecord {
   const currentRecord = record ?? createLearningRecord(answer.questionId);
   const now = new Date().toISOString();
+  const attempts = [
+    ...(currentRecord.attempts ?? []),
+    {
+      attemptedAt: now,
+      selectedAnswer: answer.selectedAnswer,
+      isCorrect: answer.isCorrect,
+      isGradable: answer.isGradable !== false,
+    },
+  ].slice(-MAX_ATTEMPT_RECORDS);
+
+  if (answer.isGradable === false) {
+    return {
+      ...currentRecord,
+      lastAnswer: answer.selectedAnswer,
+      reviewCount: currentRecord.reviewCount + 1,
+      firstSeen: currentRecord.firstSeen ?? now,
+      lastSeen: now,
+      lastReview: now,
+      updatedAt: now,
+      attempts,
+    };
+  }
 
   return {
     ...currentRecord,
@@ -79,10 +102,15 @@ export function updateLearningRecord(record: LearningRecord | undefined, answer:
     firstSeen: currentRecord.firstSeen ?? now,
     lastSeen: now,
     lastReview: now,
+    updatedAt: now,
+    attempts,
   };
 }
 
-export function createPracticeSession(questionIds: string[]): PracticeSession {
+export function createPracticeSession(
+  questionIds: string[],
+  mode: NonNullable<PracticeSession['mode']> = 'standard',
+): PracticeSession {
   const now = new Date().toISOString();
 
   return {
@@ -98,6 +126,10 @@ export function createPracticeSession(questionIds: string[]): PracticeSession {
     currentIndex: 0,
     answers: [],
     status: 'active',
+    mode,
+    initialQuestionIds: mode === 'wrongElimination' ? [...questionIds] : undefined,
+    remainingQuestionIds: mode === 'wrongElimination' ? [...questionIds] : undefined,
+    attemptCount: mode === 'wrongElimination' ? 0 : undefined,
   };
 }
 
@@ -136,8 +168,9 @@ export function ensureLearningRecords(
 
 export function updatePracticeSessionAnswer(session: PracticeSession, answer: PracticeAnswer): PracticeSession {
   const answers = [...session.answers.filter((item) => item.questionId !== answer.questionId), answer];
-  const correctCount = answers.filter((item) => item.isCorrect).length;
-  const wrongCount = answers.length - correctCount;
+  const gradableAnswers = answers.filter((item) => item.isGradable !== false);
+  const correctCount = gradableAnswers.filter((item) => item.isCorrect).length;
+  const wrongCount = gradableAnswers.length - correctCount;
   const isCompleted = answers.length >= session.totalQuestions;
   const endTime = isCompleted ? new Date().toISOString() : session.endTime;
 
@@ -146,7 +179,7 @@ export function updatePracticeSessionAnswer(session: PracticeSession, answer: Pr
     answers,
     correctCount,
     wrongCount,
-    accuracy: session.totalQuestions > 0 ? Math.round((correctCount / session.totalQuestions) * 100) : 0,
+    accuracy: gradableAnswers.length > 0 ? Math.round((correctCount / gradableAnswers.length) * 100) : 0,
     durationSeconds: calculateDurationSeconds(session.startTime, endTime ?? new Date().toISOString()),
     endTime,
     status: isCompleted ? 'completed' : 'active',

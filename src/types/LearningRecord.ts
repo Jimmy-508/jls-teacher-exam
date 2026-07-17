@@ -1,5 +1,12 @@
 import type { ChoiceKey } from './question';
 
+export interface QuestionAttemptRecord {
+  attemptedAt: string;
+  selectedAnswer: ChoiceKey;
+  isCorrect: boolean;
+  isGradable?: boolean;
+}
+
 export interface LearningRecord {
   id: string;
   learningTheme: string;
@@ -24,6 +31,7 @@ export interface LearningRecord {
   lastSeen?: string;
   lastReview?: string;
   viewedAI: boolean;
+  attempts?: QuestionAttemptRecord[];
   questionIdentity?: {
     identityVersion: 1;
     logicalKey: string;

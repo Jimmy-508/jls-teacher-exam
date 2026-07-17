@@ -4,6 +4,8 @@ export interface WrongQuestionFilters {
   year: string;
   subject: string;
   learningTheme: string;
+  startDate: string;
+  endDate: string;
 }
 
 export interface WrongQuestionExportOptions {
@@ -19,9 +21,12 @@ export interface WrongQuestionExportItem {
 
 export interface WrongQuestionPdfModel {
   title: string;
+  titleText: string;
+  analysisTitleText: string;
   fileName: string;
   generatedAt: string;
   formattedExportDate: string;
+  fileDateLabel: string;
   items: WrongQuestionExportItem[];
   questionLines: string[];
   analysisLines: string[];

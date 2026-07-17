@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareJlsSubjects, sortJlsSubjects } from './subjectOrder';
+import { compareJlsSubjects, isChineseLanguageSubject, sortJlsSubjects } from './subjectOrder';
 
 describe('subjectOrder', () => {
   it('sorts existing subjects by Traditional Chinese stroke order and keeps Chinese language last', () => {
@@ -19,6 +19,12 @@ describe('subjectOrder', () => {
       '未分類科目',
       '國文科',
     ]);
+  });
+
+  it('detects Chinese language subject names by keyword', () => {
+    expect(isChineseLanguageSubject('國語文能力測驗')).toBe(true);
+    expect(isChineseLanguageSubject('國文科')).toBe(true);
+    expect(isChineseLanguageSubject('教育原理與制度')).toBe(false);
   });
 
   it('uses the same compare function for array sorting', () => {

@@ -77,14 +77,35 @@ export function drawPracticeQuestionsByIds(
   );
 }
 
+export function normalizeChoiceKey(value: string | undefined | null): ChoiceKey | null {
+  const normalized = String(value ?? '')
+    .trim()
+    .replace(/[()（）]/g, '')
+    .replace(/[Ａ-Ｄ]/g, (character) => String.fromCharCode(character.charCodeAt(0) - 0xfee0))
+    .toUpperCase();
+
+  return normalized === 'A' || normalized === 'B' || normalized === 'C' || normalized === 'D' ? normalized : null;
+}
+
 export function checkAnswer(question: Question, selectedAnswer: ChoiceKey): PracticeAnswer {
-  const correctAnswer = question.correctAnswer.trim().toUpperCase();
+  const correctAnswer = normalizeChoiceKey(question.correctAnswer);
+
+  if (!correctAnswer) {
+    return {
+      questionId: question.id,
+      selectedAnswer,
+      correctAnswer: '',
+      isCorrect: false,
+      isGradable: false,
+    };
+  }
 
   return {
     questionId: question.id,
     selectedAnswer,
     correctAnswer,
     isCorrect: selectedAnswer === correctAnswer,
+    isGradable: true,
   };
 }
 

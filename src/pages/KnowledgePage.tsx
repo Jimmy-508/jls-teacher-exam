@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FamiliarityLevelBar from '../components/FamiliarityLevelBar';
+import { compareJlsSubjects } from '../constants/subjectOrder';
 import { loadQuestions } from '../services/csvService';
 import { LEARNING_RECORDS_STORAGE_KEY } from '../services/learningEngine';
-import { buildLearningThemes, compareSubjects, detectWeakLearningThemes } from '../services/learningThemeService';
+import { buildLearningThemes, detectWeakLearningThemes } from '../services/learningThemeService';
 import { load } from '../services/storageService';
 import type { LearningRecord } from '../types/LearningRecord';
 import type { LearningTheme } from '../types/LearningTheme';
@@ -214,5 +215,5 @@ function groupThemesBySubject(themes: readonly LearningTheme[]): Array<{ subject
       subject,
       themes: [...subjectThemes].sort((left, right) => left.name.localeCompare(right.name, 'zh-Hant')),
     }))
-    .sort((left, right) => compareSubjects(left.subject, right.subject));
+    .sort((left, right) => compareJlsSubjects(left.subject, right.subject));
 }

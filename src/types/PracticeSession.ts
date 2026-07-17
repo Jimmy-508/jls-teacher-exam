@@ -16,6 +16,11 @@ export interface PracticeSession {
   currentIndex: number;
   answers: PracticeAnswer[];
   status: PracticeSessionStatus;
+  mode?: 'standard' | 'wrongElimination';
+  initialQuestionIds?: string[];
+  remainingQuestionIds?: string[];
+  attemptCount?: number;
+  averageFeedbackLevel?: 1 | 2 | 3 | 4 | 5;
 }
 
 export interface PracticeSessionAnswerInput {

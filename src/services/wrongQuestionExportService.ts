@@ -1,10 +1,16 @@
 import { CHOICE_QUESTION_TYPE } from './questionBankFields';
+import { normalizeChoiceKey } from './questionEngine';
 import { buildQuestionLogicalKey, type QuestionIdentitySnapshot } from './questionBankIdentityService';
 import { saveBlobWithPicker, type SaveBlobResult } from './fileSaveService';
 import { LEARNING_RECORDS_STORAGE_KEY } from './learningEngine';
 import { JLS_LEARNING_RECORDS_STORAGE_KEY } from './storageKeys';
 import { load } from './storageService';
-import { buildExamYearOptions } from './yearService';
+import { buildExamYearOptions, compareExamYearsDescending } from './yearService';
+import {
+  compareLocalDateRange,
+  formatLocalDateKey,
+  isDateInInclusiveLocalRange,
+} from './dateService';
 import { compareTeacherExamSubjects, TEACHER_EXAM_SUBJECT_ORDER, sortTeacherExamSubjects } from '../constants/subjectOrder';
 import type { LearningRecord } from '../types/LearningRecord';
 import type { ChoiceKey, Question } from '../types/question';
@@ -23,6 +29,7 @@ const CANVAS_WIDTH_PX = 1191;
 const CANVAS_HEIGHT_PX = 1684;
 const BODY_FONT_PT = 12;
 const TITLE_FONT_PT = 14;
+const TITLE_DATE_FONT_PT = 11;
 const PDF_LAYOUT = {
   margin: {
     leftPt: 36,
@@ -35,6 +42,7 @@ const PDF_LAYOUT = {
   },
   analysis: {
     answerIndentPt: 0,
+    answerHangingIndentChars: 2,
     contentIndentPt: 14,
     optionIndentPt: 20,
     labelGapPt: 4,
@@ -51,7 +59,10 @@ const PDF_LAYOUT = {
 export interface WrongQuestionPdfDebugMetadata {
   questionPages: number;
   analysisStartPageIndex: number | null;
+  renderedQuestionTitle: string;
   renderedAnalysisTitle: string;
+  questionTitleDateFontPt: number;
+  analysisTitleDateFontPt: number;
   analysisBlocks: number;
   analysisBlockPositions: Array<{
     kind: PdfBlockKind;
@@ -111,10 +122,16 @@ export function filterWrongChoiceQuestions(
     .filter((question) => matchesFilter(question.subject, filters.subject))
     .filter((question) => matchesFilter(getQuestionLearningTheme(question), filters.learningTheme))
     .flatMap((question) => {
+      if (!normalizeChoiceKey(question.correctAnswer)) {
+        return [];
+      }
+
       const record = recordsByQuestionId[question.id];
       const wrongCount = Number(record?.wrongCount ?? 0);
 
-      return wrongCount > 0 && isRecordSafeForQuestion(record, question, questionIdentities[question.id])
+      return wrongCount > 0 &&
+        hasAttemptInPracticeDateFilter(record, filters) &&
+        isRecordSafeForQuestion(record, question, questionIdentities[question.id])
         ? [{ question, wrongCount }]
         : [];
     })
@@ -127,6 +144,10 @@ function isWrongChoiceQuestionForRecord(
   questionIdentities: Record<string, QuestionIdentitySnapshot>,
 ): boolean {
   if (question.type !== CHOICE_QUESTION_TYPE) {
+    return false;
+  }
+
+  if (!normalizeChoiceKey(question.correctAnswer)) {
     return false;
   }
 
@@ -156,26 +177,63 @@ function isRecordSafeForQuestion(
   return currentIdentity ? record.questionIdentity.contentHash === currentIdentity.contentHash : true;
 }
 
+export function hasAttemptInPracticeDateFilter(
+  record: LearningRecord | undefined,
+  filters: Pick<WrongQuestionFilters, 'startDate' | 'endDate'>,
+): boolean {
+  const attempts = record?.attempts ?? [];
+  const startDate = filters.startDate;
+  const endDate = filters.endDate;
+
+  if (!startDate || !endDate || compareLocalDateRange(startDate, endDate) > 0) {
+    return false;
+  }
+
+  return attempts.some((attempt) => isDateInInclusiveLocalRange(attempt.attemptedAt, startDate, endDate));
+}
+
+export function getWrongQuestionDateFilterError(filters: WrongQuestionFilters): string {
+  if (!filters.startDate || !filters.endDate) {
+    return '請完整選擇起日與迄日。';
+  }
+
+  if (compareLocalDateRange(filters.startDate, filters.endDate) > 0) {
+    return '起日不可晚於迄日。';
+  }
+
+  return '';
+}
+
+export function sortWrongQuestionExportItems(items: readonly WrongQuestionExportItem[]): WrongQuestionExportItem[] {
+  return [...items].sort((left, right) => compareQuestions(left.question, right.question));
+}
+
 export function buildWrongQuestionPdfModel(params: {
   displayName: string;
   items: readonly WrongQuestionExportItem[];
+  filters?: WrongQuestionFilters;
   now?: Date;
 }): WrongQuestionPdfModel {
   const now = params.now ?? new Date();
   const displayName = params.displayName.trim() || 'Jimmy';
-  const safeDate = formatDate(now);
-  const formattedExportDate = formatLocalExportDate(now);
-  const title = `${displayName}的錯題本 ${formattedExportDate}`;
-  const fileName = `${sanitizeFileName(displayName)}_錯題本_${safeDate}.pdf`;
-  const questionLines = buildQuestionLines(params.items);
-  const analysisLines = buildAnalysisLines(params.items);
+  const sortedItems = sortWrongQuestionExportItems(params.items);
+  const dateInfo = buildWrongQuestionExportDateInfo(params.filters, now);
+  const titleText = `${displayName}的錯題本`;
+  const analysisTitleText = '錯題本解析';
+  const title = `${titleText} ${dateInfo.displayDateLabel}`;
+  const fileName = `${sanitizeFileName(displayName)}_錯題本_${dateInfo.fileDateLabel}.pdf`;
+  const questionLines = buildQuestionLines(sortedItems);
+  const analysisLines = buildAnalysisLines(sortedItems);
 
   return {
     title,
+    titleText,
+    analysisTitleText,
     fileName,
     generatedAt: now.toISOString(),
-    formattedExportDate,
-    items: [...params.items],
+    formattedExportDate: dateInfo.displayDateLabel,
+    fileDateLabel: dateInfo.fileDateLabel,
+    items: sortedItems,
     questionLines,
     analysisLines,
   };
@@ -256,6 +314,49 @@ function buildAnalysisLines(items: readonly WrongQuestionExportItem[]): string[]
   ]);
 }
 
+function buildWrongQuestionExportDateInfo(
+  filters: WrongQuestionFilters | undefined,
+  now: Date,
+): { displayDateLabel: string; fileDateLabel: string } {
+  const today = formatLocalDateKey(now);
+  const startDate = filters?.startDate ?? today;
+  const endDate = filters?.endDate ?? today;
+  const safeStartDate = startDate || today;
+  const safeEndDate = endDate || safeStartDate;
+  const isSingleDay = safeStartDate === safeEndDate;
+  const displayDateLabel = formatWrongQuestionPdfDateRange(safeStartDate, safeEndDate);
+  const fileDateLabel = isSingleDay ? safeStartDate : `${safeStartDate}_至_${safeEndDate}`;
+
+  return {
+    displayDateLabel,
+    fileDateLabel,
+  };
+}
+
+export function formatWrongQuestionPdfDateRange(startDate: string, endDate: string): string {
+  const start = parseDateParts(startDate) ?? parseDateParts(formatLocalDateKey())!;
+  const end = parseDateParts(endDate) ?? start;
+
+  if (toDateKeyFromParts(start) === toDateKeyFromParts(end)) {
+    return `${start.month}/${start.day}`;
+  }
+
+  if (start.year === end.year) {
+    return `${start.month}/${start.day}~${end.month}/${end.day}`;
+  }
+
+  return `${start.year}/${start.month}/${start.day}~${end.year}/${end.month}/${end.day}`;
+}
+
+function parseDateParts(value: string): { year: string; month: string; day: string } | null {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? { year: match[1], month: match[2], day: match[3] } : null;
+}
+
+function toDateKeyFromParts(parts: { year: string; month: string; day: string }): string {
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 export async function createWrongQuestionPdfBlob(lines: readonly string[]): Promise<Blob> {
   const images = await renderPdfDocumentToJpegPages(buildLegacyPdfDocument(lines));
   const bytes = assembleImagePdfBytes(images);
@@ -310,8 +411,13 @@ type PdfBlockKind =
 interface PdfSection {
   kind: 'questions' | 'analysis';
   forceNewPage: boolean;
-  title: string;
+  title: PdfSectionTitle;
   blocks: PdfTextBlock[];
+}
+
+interface PdfSectionTitle {
+  text: string;
+  dateLabel?: string;
 }
 
 interface WrongQuestionPdfDocument {
@@ -454,15 +560,14 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
     await finishCurrentPage();
   };
 
-  const renderTitle = async (title: string, spacingAfter: number) => {
-    const wrappedTitle = splitTextByScript(title);
+  const renderSectionTitle = async (title: PdfSectionTitle, spacingAfter: number) => {
     const blockHeight = lineHeight + spacingAfter;
 
     if (y + blockHeight > pageBottom && hasContent) {
       await finishCurrentPage();
     }
 
-    drawCenteredRuns(context, wrappedTitle, pageWidth / 2, y, scale);
+    drawMixedSizeCenteredTitle(context, title, pageWidth / 2, y, scale);
     y += lineHeight + spacingAfter;
     hasContent = true;
   };
@@ -507,14 +612,14 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
     }
   };
 
-  await renderTitle(documentModel.questionSection.title, ptToPx(PDF_LAYOUT.spacing.titleAfterPt));
+  await renderSectionTitle(documentModel.questionSection.title, ptToPx(PDF_LAYOUT.spacing.titleAfterPt));
   await renderBlocks(documentModel.questionSection);
   const questionPages = pageIndex;
 
   if (documentModel.analysisSection.blocks.length > 0) {
     await startFreshPage();
     analysisStartPageIndex = pageIndex;
-    await renderTitle(documentModel.analysisSection.title, ptToPx(PDF_LAYOUT.spacing.analysisTitleAfterPt));
+    await renderSectionTitle(documentModel.analysisSection.title, ptToPx(PDF_LAYOUT.spacing.analysisTitleAfterPt));
     await renderBlocks(documentModel.analysisSection);
   }
 
@@ -522,7 +627,10 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
   lastWrongQuestionPdfDebugMetadata = {
     questionPages,
     analysisStartPageIndex,
-    renderedAnalysisTitle: documentModel.analysisSection.title,
+    renderedQuestionTitle: formatSectionTitle(documentModel.questionSection.title),
+    renderedAnalysisTitle: formatSectionTitle(documentModel.analysisSection.title),
+    questionTitleDateFontPt: TITLE_DATE_FONT_PT,
+    analysisTitleDateFontPt: TITLE_DATE_FONT_PT,
     analysisBlocks: documentModel.analysisSection.blocks.filter((block) => block.kind !== 'spacer').length,
     analysisBlockPositions,
   };
@@ -531,7 +639,7 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
     console.info('[JLS PDF]', {
       questionPages,
       analysisStartPage: analysisStartPageIndex,
-      analysisTitle: documentModel.analysisSection.title,
+      analysisTitle: formatSectionTitle(documentModel.analysisSection.title),
       analysisBlocks: lastWrongQuestionPdfDebugMetadata.analysisBlocks,
     });
   }
@@ -547,13 +655,13 @@ function buildLegacyPdfDocument(lines: readonly string[]): WrongQuestionPdfDocum
     questionSection: {
       kind: 'questions',
       forceNewPage: false,
-      title,
+      title: { text: title },
       blocks: buildQuestionBlocks(contentLines),
     },
     analysisSection: {
       kind: 'analysis',
       forceNewPage: true,
-      title: '',
+      title: { text: '' },
       blocks: [],
     },
   };
@@ -564,13 +672,19 @@ function buildWrongQuestionPdfDocument(model: WrongQuestionPdfModel): WrongQuest
     questionSection: {
       kind: 'questions',
       forceNewPage: false,
-      title: model.title,
+      title: {
+        text: model.titleText,
+        dateLabel: model.formattedExportDate,
+      },
       blocks: buildQuestionBlocks(model.questionLines),
     },
     analysisSection: {
       kind: 'analysis',
       forceNewPage: true,
-      title: `錯題本解析 ${model.formattedExportDate}`,
+      title: {
+        text: model.analysisTitleText,
+        dateLabel: model.formattedExportDate,
+      },
       blocks: buildAnalysisBlocks(model.analysisLines),
     },
   };
@@ -720,7 +834,11 @@ function getBlockHangingLineX(
     return firstLineX + measureMatchedPrefix(context, text, /^(\([A-D]\))/) + ptToPx(PDF_LAYOUT.analysis.labelGapPt);
   }
 
-  if (kind === 'questionStem' || kind === 'analysisAnswer') {
+  if (kind === 'analysisAnswer') {
+    return firstLineX + measurePlainText(context, '國'.repeat(PDF_LAYOUT.analysis.answerHangingIndentChars));
+  }
+
+  if (kind === 'questionStem') {
     return firstLineX + measureMatchedPrefix(context, text, /^(\d+\.\s+)/);
   }
 
@@ -734,10 +852,6 @@ function getBlockHangingLineX(
 function measureMatchedPrefix(context: CanvasRenderingContext2D, text: string, pattern: RegExp): number {
   const match = text.match(pattern);
   return match ? measurePlainText(context, match[1]) : 0;
-}
-
-function parseExportDateFromTitle(title: string): string {
-  return title.match(/\d{4}\/\d{2}\/\d{2}/)?.[0] ?? formatLocalExportDate(new Date());
 }
 
 function ptToPx(value: number): number {
@@ -756,10 +870,32 @@ function prepareCanvasPage(context: CanvasRenderingContext2D, width: number, hei
   setCanvasFont(context, 'chinese', BODY_FONT_PT * scale);
 }
 
-function drawCenteredRuns(context: CanvasRenderingContext2D, runs: readonly TextRun[], centerX: number, y: number, scale: number): void {
-  const fontSizePx = TITLE_FONT_PT * scale;
-  const width = runs.reduce((sum, run) => sum + measureTextRun(context, run, fontSizePx), 0);
-  drawRuns(context, runs, Math.round(centerX - width / 2), Math.round(y), fontSizePx);
+function drawMixedSizeCenteredTitle(
+  context: CanvasRenderingContext2D,
+  title: PdfSectionTitle,
+  centerX: number,
+  y: number,
+  scale: number,
+): void {
+  const mainRuns = splitTextByScript(title.text);
+  const dateRuns = title.dateLabel ? splitTextByScript(title.dateLabel) : [];
+  const mainFontSizePx = TITLE_FONT_PT * scale;
+  const dateFontSizePx = TITLE_DATE_FONT_PT * scale;
+  const gapWidth = dateRuns.length > 0 ? measureTextRun(context, { text: ' ', script: 'latin' }, mainFontSizePx) : 0;
+  const mainWidth = mainRuns.reduce((sum, run) => sum + measureTextRun(context, run, mainFontSizePx), 0);
+  const dateWidth = dateRuns.reduce((sum, run) => sum + measureTextRun(context, run, dateFontSizePx), 0);
+  const totalWidth = mainWidth + gapWidth + dateWidth;
+  const startX = Math.round(centerX - totalWidth / 2);
+
+  drawRuns(context, mainRuns, startX, Math.round(y), mainFontSizePx);
+
+  if (dateRuns.length > 0) {
+    drawRuns(context, dateRuns, startX + mainWidth + gapWidth, Math.round(y + (mainFontSizePx - dateFontSizePx) / 2), dateFontSizePx);
+  }
+}
+
+function formatSectionTitle(title: PdfSectionTitle): string {
+  return title.dateLabel ? `${title.text} ${title.dateLabel}` : title.text;
 }
 
 function drawRuns(
@@ -1021,14 +1157,39 @@ function matchesFilter(value: string, filter: string): boolean {
 
 function compareQuestions(left: Question, right: Question): number {
   return (
-    compareNaturalText(left.year, right.year) ||
-    compareNaturalText(left.subject, right.subject) ||
-    compareNaturalText(left.questionNumber, right.questionNumber)
+    compareExamYearsDescending(left.year, right.year) ||
+    compareTeacherExamSubjects(left.subject, right.subject) ||
+    compareQuestionNumber(left.questionNumber, right.questionNumber)
   );
 }
 
 function compareNaturalText(left: string, right: string): number {
   return left.localeCompare(right, 'zh-Hant', { numeric: true, sensitivity: 'base' });
+}
+
+function compareQuestionNumber(left: string, right: string): number {
+  const leftNumber = parseQuestionNumber(left);
+  const rightNumber = parseQuestionNumber(right);
+
+  if (leftNumber !== null && rightNumber !== null && leftNumber !== rightNumber) {
+    return leftNumber - rightNumber;
+  }
+
+  if (leftNumber !== null && rightNumber === null) {
+    return -1;
+  }
+
+  if (leftNumber === null && rightNumber !== null) {
+    return 1;
+  }
+
+  return compareNaturalText(left, right);
+}
+
+function parseQuestionNumber(value: string): number | null {
+  const match = value.trim().match(/\d+/);
+  const parsed = match ? Number(match[0]) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 const englishCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
@@ -1078,13 +1239,6 @@ function cleanPdfText(value: string): string {
 
 function sanitizeFileName(value: string): string {
   return (value.trim() || 'Jimmy').replace(/[\\/:*?"<>|]/g, '_');
-}
-
-function formatDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 export function formatLocalExportDate(date: Date): string {

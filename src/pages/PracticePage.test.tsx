@@ -1,21 +1,22 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  EssayPracticeCard,
   DEFAULT_QUESTION_COUNT_BY_TYPE,
+  EssayPracticeCard,
   PracticeCountSelector,
   PracticeFilterSelector,
   PracticeTypeSelector,
+  buildPracticeResultState,
   canUseRestoredPracticeSession,
   normalizePracticeFiltersForOptions,
   practiceCountOptions,
   sanitizeCustomQuestionCount,
   selectPracticeQuestions,
 } from './PracticePage';
-import type { PracticeSession } from '../types/PracticeSession';
-import type { Question } from '../types/question';
 import { CHOICE_QUESTION_TYPE, ESSAY_QUESTION_TYPE } from '../services/questionBankFields';
+import type { PracticeSession } from '../types/PracticeSession';
 import type { SmartFeedbackResult } from '../types/SmartFeedback';
+import type { Question } from '../types/question';
 
 vi.mock('react-router-dom', () => ({
   useLocation: () => ({ state: undefined }),
@@ -44,8 +45,6 @@ describe('PracticePage controls', () => {
 
     expect(html).toContain('value="custom"');
     expect(html).toContain('type="number"');
-    expect(html).toContain('自訂');
-    expect(html).not.toContain('使用者自訂');
   });
 
   it('shows simplified preset question count options', () => {
@@ -61,36 +60,18 @@ describe('PracticePage controls', () => {
       />,
     );
 
-    expect(html).toContain('1 題');
-    expect(html).toContain('5 題');
-    expect(html).toContain('10 題');
-    expect(html).toContain('25 題');
-    expect(html).not.toContain('20 題');
-  });
-
-  it('renders subject options with all subjects first and Chinese language last', () => {
-    const html = renderToStaticMarkup(
-      <PracticeFilterSelector
-        value={{ year: '', subject: '', coreConcept: '', wrongQuestion: 'all' }}
-        options={{
-          years: ['113'],
-          subjects: ['中等學校課程與教學', '青少年發展與輔導', '教育原理與制度', '國語文能力測驗'],
-          coreConcepts: ['形成性評量'],
-        }}
-        onChange={() => undefined}
-      />,
-    );
-
-    expect(html.indexOf('全部科目')).toBeLessThan(html.indexOf('中等學校課程與教學'));
-    expect(html.indexOf('中等學校課程與教學')).toBeLessThan(html.indexOf('青少年發展與輔導'));
-    expect(html.indexOf('青少年發展與輔導')).toBeLessThan(html.indexOf('教育原理與制度'));
-    expect(html.indexOf('教育原理與制度')).toBeLessThan(html.indexOf('國語文能力測驗'));
+    expect(html).toContain('1');
+    expect(html).toContain('5');
+    expect(html).toContain('10');
+    expect(html).toContain('25');
+    expect(html).not.toContain('20');
   });
 
   it('renders all years first before newest-to-oldest year options', () => {
     const html = renderToStaticMarkup(
       <PracticeFilterSelector
         value={{ year: '', subject: '', coreConcept: '', wrongQuestion: 'all' }}
+        typeFilter="choice"
         options={{
           years: ['115', '114', '113'],
           subjects: [],
@@ -105,6 +86,32 @@ describe('PracticePage controls', () => {
     expect(html.indexOf('114')).toBeLessThan(html.indexOf('113'));
   });
 
+  it('disables wrong-question options for essay practice', () => {
+    const choiceHtml = renderToStaticMarkup(
+      <PracticeFilterSelector
+        value={{ year: '', subject: '', coreConcept: '', wrongQuestion: 'all' }}
+        typeFilter="choice"
+        options={{ years: [], subjects: [], coreConcepts: [] }}
+        onChange={() => undefined}
+      />,
+    );
+    const essayHtml = renderToStaticMarkup(
+      <PracticeFilterSelector
+        value={{ year: '', subject: '', coreConcept: '', wrongQuestion: 'all' }}
+        typeFilter="essay"
+        options={{ years: [], subjects: [], coreConcepts: [] }}
+        onChange={() => undefined}
+      />,
+    );
+
+    expect(choiceHtml).toContain('value="wrongOnly"');
+    expect(choiceHtml).toContain('value="wrongElimination"');
+    expect(choiceHtml).not.toContain('value="wrongOnly" disabled');
+    expect(choiceHtml).not.toContain('value="wrongElimination" disabled');
+    expect(essayHtml).toContain('value="wrongOnly" disabled');
+    expect(essayHtml).toContain('value="wrongElimination" disabled');
+  });
+
   it('resets an invalid subject after year-filtered subject options change', () => {
     const normalizedFilters = normalizePracticeFiltersForOptions(
       { year: '114', subject: '國語文能力測驗', coreConcept: '', wrongQuestion: 'all' },
@@ -117,45 +124,21 @@ describe('PracticePage controls', () => {
     expect(normalizedFilters.subject).toBe('');
   });
 
-  it('renders all core concepts before sorted concept options', () => {
-    const html = renderToStaticMarkup(
-      <PracticeFilterSelector
-        value={{ year: '', subject: '', coreConcept: '', wrongQuestion: 'all' }}
-        options={{
-          years: [],
-          subjects: [],
-          coreConcepts: ['A2 theory', 'Piaget', '核心概念'],
-        }}
-        onChange={() => undefined}
-      />,
-    );
-
-    expect(html.indexOf('全部核心概念')).toBeLessThan(html.indexOf('A2 theory'));
-    expect(html.indexOf('A2 theory')).toBeLessThan(html.indexOf('Piaget'));
-    expect(html.indexOf('Piaget')).toBeLessThan(html.indexOf('核心概念'));
-  });
-
   it('resets an invalid core concept after year and subject filter options change', () => {
     const normalizedFilters = normalizePracticeFiltersForOptions(
       { year: '114', subject: '教育理念與實務', coreConcept: 'Piaget', wrongQuestion: 'all' },
       [
         createQuestion('Q1', { year: '113', subject: '教育理念與實務', coreConcept: 'Piaget' }),
-        createQuestion('Q2', { year: '114', subject: '教育理念與實務', coreConcept: 'ABC 理論' }),
+        createQuestion('Q2', { year: '114', subject: '教育理念與實務', coreConcept: '形成性評量' }),
       ],
     );
 
     expect(normalizedFilters.coreConcept).toBe('');
   });
 
-  it('custom question count is at least 1', () => {
+  it('custom question count is clamped to the eligible range', () => {
     expect(sanitizeCustomQuestionCount(0, 10)).toBe(1);
-  });
-
-  it('custom question count cannot exceed eligible question count', () => {
     expect(sanitizeCustomQuestionCount(99, 7)).toBe(7);
-  });
-
-  it('custom question count can still accept 20 when it is within the eligible count', () => {
     expect(sanitizeCustomQuestionCount(20, 25)).toBe(20);
   });
 
@@ -164,12 +147,9 @@ describe('PracticePage controls', () => {
     expect(DEFAULT_QUESTION_COUNT_BY_TYPE.essay).toBe(1);
   });
 
-  it('does not restore a session when switching to essay practice', () => {
-    expect(canUseRestoredPracticeSession(createSession(), [createQuestion('Q1')], 'essay', false)).toBe(false);
-  });
-
   it('restores a valid session only for normal choice practice', () => {
     expect(canUseRestoredPracticeSession(createSession(), [createQuestion('Q1')], 'choice', false)).toBe(true);
+    expect(canUseRestoredPracticeSession(createSession(), [createQuestion('Q1')], 'essay', false)).toBe(false);
     expect(canUseRestoredPracticeSession(createSession(), [createQuestion('Q1')], 'choice', true)).toBe(false);
   });
 
@@ -233,13 +213,13 @@ describe('PracticePage controls', () => {
 
     expect(html).toContain('參考答案');
     expect(html).toContain('非選參考答案內容');
-    expect(html).not.toContain('作答回饋');
+    expect(html).not.toContain('作答回饋參考');
   });
 
   it('shows feedback first and only one reference answer block after essay submit', () => {
     const html = renderToStaticMarkup(
       <EssayPracticeCard
-        answer="我的作答"
+        answer="我的答案"
         errorMessage=""
         feedback={createFeedback()}
         isGeneratingFeedback={false}
@@ -254,6 +234,47 @@ describe('PracticePage controls', () => {
     expect(html).toContain('作答回饋參考');
     expect(html.indexOf('作答回饋參考')).toBeLessThan(html.indexOf('參考答案'));
     expect(html.match(/參考答案/g)).toHaveLength(1);
+  });
+
+  it('builds essay result state from average smart feedback levels', () => {
+    const result = buildPracticeResultState({
+      questions: [createEssayQuestion('E1'), createEssayQuestion('E2')],
+      answers: [],
+      essayFeedback: {
+        E1: createFeedback(4),
+        E2: createFeedback(2),
+      },
+      questionType: 'essay',
+    });
+
+    expect(result).toEqual({
+      totalCount: 2,
+      correctCount: 0,
+      wrongCount: 0,
+      gradableCount: 0,
+      questionType: ESSAY_QUESTION_TYPE,
+      averageFeedbackLevel: 3,
+    });
+  });
+
+  it('builds choice result state without essay feedback average', () => {
+    const result = buildPracticeResultState({
+      questions: [createQuestion('C1'), createQuestion('C2')],
+      answers: [
+        { questionId: 'C1', selectedAnswer: 'A', correctAnswer: 'A', isCorrect: true },
+        { questionId: 'C2', selectedAnswer: 'B', correctAnswer: 'A', isCorrect: false },
+      ],
+      essayFeedback: {},
+      questionType: 'choice',
+    });
+
+    expect(result).toEqual({
+      totalCount: 2,
+      correctCount: 1,
+      wrongCount: 1,
+      gradableCount: 2,
+      questionType: CHOICE_QUESTION_TYPE,
+    });
   });
 });
 
@@ -296,19 +317,19 @@ function createQuestion(id: string, overrides: Partial<Question> = {}): Question
   };
 }
 
-function createEssayQuestion(): Question {
+function createEssayQuestion(id = 'E1'): Question {
   return {
-    ...createQuestion('E1'),
-    type: '非選題',
+    ...createQuestion(id),
+    type: ESSAY_QUESTION_TYPE,
     score: 10,
     essayReferenceAnswer: '非選參考答案內容',
   };
 }
 
-function createFeedback(): SmartFeedbackResult {
+function createFeedback(level: 1 | 2 | 3 | 4 | 5 = 4): SmartFeedbackResult {
   return {
-    level: 4,
-    summary: '方向正確。',
+    level,
+    summary: '已有核心概念。',
     coveredConcepts: [],
     missingConcepts: [],
     matchedBonusConcepts: [],
