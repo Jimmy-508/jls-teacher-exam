@@ -70,6 +70,13 @@ describe('csvService', () => {
     expect(questions.map((question) => question.type)).toEqual([ESSAY_QUESTION_TYPE, ESSAY_QUESTION_TYPE]);
   });
 
+  it('normalizes invisible characters in subject names while importing questions', () => {
+    const headers = [QUESTION_BANK_FIELDS.id, QUESTION_BANK_FIELDS.subject, QUESTION_BANK_FIELDS.type, QUESTION_BANK_FIELDS.stem];
+    const [question] = parseCsv([headers.join(','), 'Q001,\uFEFF教育原理與制度\u200B,choice,題幹'].join('\n')).map(toQuestion);
+
+    expect(question.subject).toBe('教育原理與制度');
+  });
+
   it('imports the actual 25-column schema by header name', () => {
     const csv = [QUESTION_BANK_TEMPLATE_HEADERS.join(','), createFullRow('Q025', '測驗', '題幹有內容')].join('\n');
     const [question] = parseCsv(csv).map(toQuestion);

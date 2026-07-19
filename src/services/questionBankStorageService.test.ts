@@ -40,6 +40,7 @@ vi.mock('./questionBankIndexedDbService', () => ({
 import { load, remove } from './storageService';
 import {
   getActiveQuestionBank,
+  getActiveQuestions,
   getImportedQuestionBank,
   resetImportedQuestionBank,
   saveImportedQuestionBank,
@@ -89,6 +90,20 @@ describe('questionBankStorageService', () => {
     expect(activeQuestionBank.source).toBe('imported');
     expect(activeQuestionBank.questions).toHaveLength(1);
     expect(activeQuestionBank.summary.totalQuestions).toBe(1);
+  });
+
+  it('normalizes legacy IndexedDB subject names while reading active questions', async () => {
+    await saveImportedQuestionBank(validCsv);
+    indexedDb.questions = indexedDb.questions.map((question) => ({
+      ...(question as Record<string, unknown>),
+      subject: '教育原理與制度\u200B',
+    }));
+
+    const activeQuestionBank = await getActiveQuestionBank();
+    const activeQuestions = await getActiveQuestions();
+
+    expect(activeQuestionBank.questions[0].subject).toBe('教育原理與制度');
+    expect(activeQuestions[0].subject).toBe('教育原理與制度');
   });
 
   it('falls back to default question bank and stores it in IndexedDB', async () => {

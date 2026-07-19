@@ -11,7 +11,12 @@ import {
   formatLocalDateKey,
   isDateInInclusiveLocalRange,
 } from './dateService';
-import { compareTeacherExamSubjects, TEACHER_EXAM_SUBJECT_ORDER, sortTeacherExamSubjects } from '../constants/subjectOrder';
+import {
+  compareTeacherExamSubjects,
+  normalizeSubjectName,
+  TEACHER_EXAM_SUBJECT_ORDER,
+  sortTeacherExamSubjects,
+} from '../constants/subjectOrder';
 import type { LearningRecord } from '../types/LearningRecord';
 import type { ChoiceKey, Question } from '../types/question';
 import type {
@@ -97,7 +102,7 @@ export function buildWrongQuestionFilterOptions(
   questionIdentities: Record<string, QuestionIdentitySnapshot> = {},
 ): WrongQuestionFilterOptions {
   const yearFiltered = questions.filter((question) => matchesFilter(question.year, filters.year));
-  const subjectFiltered = yearFiltered.filter((question) => matchesFilter(question.subject, filters.subject));
+  const subjectFiltered = yearFiltered.filter((question) => matchesSubjectFilter(question.subject, filters.subject));
   const hasWrongQuestionRecords = Object.keys(recordsByQuestionId).length > 0;
   const learningThemeSource = hasWrongQuestionRecords
     ? subjectFiltered.filter((question) => isWrongChoiceQuestionForRecord(question, recordsByQuestionId, questionIdentities))
@@ -119,7 +124,7 @@ export function filterWrongChoiceQuestions(
   return questions
     .filter((question) => question.type === CHOICE_QUESTION_TYPE)
     .filter((question) => matchesFilter(question.year, filters.year))
-    .filter((question) => matchesFilter(question.subject, filters.subject))
+    .filter((question) => matchesSubjectFilter(question.subject, filters.subject))
     .filter((question) => matchesFilter(getQuestionLearningTheme(question), filters.learningTheme))
     .flatMap((question) => {
       if (!normalizeChoiceKey(question.correctAnswer)) {
@@ -1153,6 +1158,10 @@ export function compareSubjects(left: string, right: string): number {
 
 function matchesFilter(value: string, filter: string): boolean {
   return filter === ALL_FILTER_VALUE || value === filter;
+}
+
+function matchesSubjectFilter(value: string, filter: string): boolean {
+  return filter === ALL_FILTER_VALUE || normalizeSubjectName(value) === normalizeSubjectName(filter);
 }
 
 function compareQuestions(left: Question, right: Question): number {

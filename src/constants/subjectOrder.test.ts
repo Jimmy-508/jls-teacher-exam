@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareJlsSubjects, isChineseLanguageSubject, sortJlsSubjects } from './subjectOrder';
+import { compareJlsSubjects, isChineseLanguageSubject, normalizeSubjectName, sortJlsSubjects } from './subjectOrder';
 
 describe('subjectOrder', () => {
   it('sorts existing subjects by Traditional Chinese stroke order and keeps Chinese language last', () => {
@@ -19,6 +19,25 @@ describe('subjectOrder', () => {
       '未分類科目',
       '國文科',
     ]);
+  });
+
+  it('normalizes and deduplicates visually identical subject names', () => {
+    expect(
+      sortJlsSubjects([
+        '教育原理與制度',
+        '教育原理與制度\u200B',
+        '\uFEFF教育原理與制度',
+        ' 教育原理與制度 ',
+        '教育原理與制度　',
+      ]),
+    ).toEqual(['教育原理與制度']);
+  });
+
+  it('normalizes invisible characters and blank subject names', () => {
+    expect(normalizeSubjectName('')).toBe('未分類科目');
+    expect(normalizeSubjectName(' \u200B ')).toBe('未分類科目');
+    expect(normalizeSubjectName('教育  原理與制度')).toBe('教育 原理與制度');
+    expect(normalizeSubjectName('教育原理與制度\u2060')).toBe('教育原理與制度');
   });
 
   it('detects Chinese language subject names by keyword', () => {

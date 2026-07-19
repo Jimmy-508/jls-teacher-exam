@@ -6,6 +6,7 @@ import ReferenceAnswerPanel from '../components/ReferenceAnswerPanel';
 import SmartFeedbackPanel from '../components/SmartFeedbackPanel';
 import { loadQuestions } from '../services/csvService';
 import { getLearningThemeDisplayName } from '../services/displayDictionary';
+import { normalizeSubjectName } from '../constants/subjectOrder';
 import { buildOfflineChoiceExplanation } from '../services/offlineExplanationService';
 import {
   ACTIVE_PRACTICE_SESSION_STORAGE_KEY,
@@ -836,8 +837,10 @@ export function normalizePracticeFiltersForOptions(filters: PracticeFilters, que
   const options = buildPracticeFilterOptionsForFilters(questions, filters);
   const nextFilters = { ...filters };
 
-  if (nextFilters.subject && !options.subjects.includes(nextFilters.subject)) {
-    nextFilters.subject = '';
+  if (nextFilters.subject) {
+    const normalizedSelectedSubject = normalizeSubjectName(nextFilters.subject);
+    const matchingSubject = options.subjects.find((subject) => normalizeSubjectName(subject) === normalizedSelectedSubject);
+    nextFilters.subject = matchingSubject ?? '';
   }
 
   const coreConceptOptions = buildPracticeFilterOptionsForFilters(questions, nextFilters);

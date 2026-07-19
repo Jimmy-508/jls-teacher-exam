@@ -97,6 +97,31 @@ describe('practiceFilterService', () => {
     expect(buildPracticeFilterOptions(questions, '114').subjects).toEqual(['教育原理與制度']);
   });
 
+  it('deduplicates visually identical subject options and filters all normalized matches', () => {
+    const questions = [
+      createQuestion({ id: 'Q1', subject: '教育原理與制度' }),
+      createQuestion({ id: 'Q2', subject: '教育原理與制度\u200B' }),
+      createQuestion({ id: 'Q3', subject: '\uFEFF教育原理與制度' }),
+      createQuestion({ id: 'Q4', subject: '青少年發展與輔導' }),
+    ];
+
+    expect(buildPracticeFilterOptionsForFilters(questions, { year: '', subject: '' }).subjects).toEqual([
+      '青少年發展與輔導',
+      '教育原理與制度',
+    ]);
+
+    expect(
+      filterPracticeQuestions(
+        questions,
+        {
+          ...DEFAULT_PRACTICE_FILTERS,
+          subject: '教育原理與制度',
+        },
+        'choice',
+      ).map((question) => question.id),
+    ).toEqual(['Q1', 'Q2', 'Q3']);
+  });
+
   it('filters practice questions by year, subject, core concept, and type as an intersection', () => {
     const questions = [
       createQuestion({ id: 'Q1', year: '113', subject: '教育評量', coreConcept: '形成性評量', type: '選擇題' }),

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FamiliarityLevelBar from '../components/FamiliarityLevelBar';
-import { compareJlsSubjects } from '../constants/subjectOrder';
+import { compareJlsSubjects, normalizeSubjectName } from '../constants/subjectOrder';
 import { loadQuestions } from '../services/csvService';
 import { LEARNING_RECORDS_STORAGE_KEY } from '../services/learningEngine';
 import { buildLearningThemes, detectWeakLearningThemes } from '../services/learningThemeService';
@@ -206,7 +206,7 @@ function groupThemesBySubject(themes: readonly LearningTheme[]): Array<{ subject
   const groups = new Map<string, LearningTheme[]>();
 
   themes.forEach((theme) => {
-    const subject = theme.subject.trim() || '未分類科目';
+    const subject = normalizeSubjectName(theme.subject);
     groups.set(subject, [...(groups.get(subject) ?? []), theme]);
   });
 

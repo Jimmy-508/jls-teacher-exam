@@ -1,6 +1,6 @@
 import type { LearningRecord } from '../types/LearningRecord';
 import type { Question } from '../types/question';
-import { sortTeacherExamSubjects } from '../constants/subjectOrder';
+import { normalizeSubjectName, sortTeacherExamSubjects } from '../constants/subjectOrder';
 import { getPracticeQuestionsByType, normalizeChoiceKey, type PracticeQuestionTypeFilter } from './questionEngine';
 import { buildExamYearOptions } from './yearService';
 
@@ -47,7 +47,7 @@ export function buildPracticeFilterOptionsForFilters(
 ): PracticeFilterOptions {
   const yearFilteredQuestions = filters.year ? questions.filter((question) => question.year === filters.year) : questions;
   const subjectFilteredQuestions = filters.subject
-    ? yearFilteredQuestions.filter((question) => question.subject === filters.subject)
+    ? yearFilteredQuestions.filter((question) => isSameSubject(question.subject, filters.subject))
     : yearFilteredQuestions;
 
   return {
@@ -70,7 +70,7 @@ export function filterPracticeQuestions(
       return false;
     }
 
-    if (filters.subject && question.subject !== filters.subject) {
+    if (filters.subject && !isSameSubject(question.subject, filters.subject)) {
       return false;
     }
 
@@ -84,6 +84,10 @@ export function filterPracticeQuestions(
 
     return true;
   });
+}
+
+export function isSameSubject(left: string, right: string): boolean {
+  return normalizeSubjectName(left) === normalizeSubjectName(right);
 }
 
 export function normalizeWrongQuestionFilterForType(

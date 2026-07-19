@@ -26,15 +26,21 @@ export function compareJlsSubjects(left: string, right: string): number {
 }
 
 export function sortJlsSubjects(subjects: readonly string[]): string[] {
-  return Array.from(new Set(subjects.map((subject) => subject.trim()).filter(Boolean))).sort(compareJlsSubjects);
+  return Array.from(new Set(subjects.map((subject) => normalizeSubjectName(subject)))).sort(compareJlsSubjects);
 }
 
 export const TEACHER_EXAM_SUBJECT_ORDER = CHINESE_LANGUAGE_SUBJECT_NAMES;
 export const compareTeacherExamSubjects = compareJlsSubjects;
 export const sortTeacherExamSubjects = sortJlsSubjects;
 
-function normalizeSubjectName(value: string): string {
-  return value.trim() || UNCATEGORIZED_SUBJECT;
+export function normalizeSubjectName(value?: string | null): string {
+  const normalized = (value ?? '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return normalized || UNCATEGORIZED_SUBJECT;
 }
 
 function getSpecialSubjectRank(value: string): number {
@@ -50,6 +56,6 @@ function getSpecialSubjectRank(value: string): number {
 }
 
 export function isChineseLanguageSubject(subject: string): boolean {
-  const normalized = subject.trim();
+  const normalized = normalizeSubjectName(subject);
   return normalized.includes('國文') || normalized.includes('國語文');
 }

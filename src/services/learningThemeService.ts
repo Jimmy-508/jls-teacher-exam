@@ -1,4 +1,4 @@
-import { compareJlsSubjects, UNCATEGORIZED_SUBJECT } from '../constants/subjectOrder';
+import { compareJlsSubjects, normalizeSubjectName } from '../constants/subjectOrder';
 import type { LearningRecord } from '../types/LearningRecord';
 import type { LearningTheme } from '../types/LearningTheme';
 import type { Question } from '../types/question';
@@ -78,14 +78,14 @@ export function getQuestionsByTheme(questions: readonly Question[], themeName: s
 
 export function resolveQuestionLearningTheme(question: Question): { subject: string; name: string } {
   return {
-    subject: question.subject.trim() || UNCATEGORIZED_SUBJECT,
+    subject: normalizeSubjectName(question.subject),
     name: getDisplayLearningTheme(question),
   };
 }
 
 export function isQuestionInLearningTheme(question: Question, subject: string | undefined, learningThemeName: string): boolean {
   const resolvedTheme = resolveQuestionLearningTheme(question);
-  const normalizedSubject = subject?.trim();
+  const normalizedSubject = subject ? normalizeSubjectName(subject) : undefined;
   const normalizedThemeName = getLearningThemeDisplayName(learningThemeName.trim());
 
   return (!normalizedSubject || resolvedTheme.subject === normalizedSubject) && resolvedTheme.name === normalizedThemeName;
@@ -174,7 +174,7 @@ function normalizeThemeId(name: string): string {
 }
 
 function getDisplayLearningTheme(question: Question): string {
-  const subject = question.subject.trim();
+  const subject = normalizeSubjectName(question.subject);
   const category = question.category.trim();
   const themeCandidates = [question.learningTheme, question.group]
     .map((value) => value.trim())

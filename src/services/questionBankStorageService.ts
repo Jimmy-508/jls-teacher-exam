@@ -1,4 +1,5 @@
 import { APP_PACKAGE_VERSION } from '../config/appInfo';
+import { normalizeSubjectName } from '../constants/subjectOrder';
 import type { Question } from '../types/question';
 import type { QuestionBankValidationResult } from '../types/QuestionBankValidation';
 import {
@@ -109,7 +110,7 @@ export async function getActiveQuestions(): Promise<Question[]> {
     return (await getActiveQuestionBank()).questions;
   }
 
-  return getStoredQuestions();
+  return normalizeStoredQuestions(await getStoredQuestions());
 }
 
 export async function getActiveQuestionBankMetadata(): Promise<StoredQuestionBankMetadata | null> {
@@ -209,14 +210,37 @@ function buildMetadata({
 }
 
 function toActiveQuestionBank(metadata: StoredQuestionBankMetadata, questions: Question[]): ActiveQuestionBank {
+  const normalizedQuestions = normalizeStoredQuestions(questions);
+
   return {
-    questions,
+    questions: normalizedQuestions,
     validation: metadata.validation,
     summary: metadata.summary,
     source: metadata.source,
     importedAt: metadata.importedAt,
     metadata,
   };
+}
+
+function normalizeStoredQuestions(questions: readonly Question[]): Question[] {
+  let changed = false;
+
+  const normalizedQuestions = questions.map((question) => {
+    const normalizedSubject = normalizeSubjectName(question.subject);
+
+    if (normalizedSubject === question.subject) {
+      return question;
+    }
+
+    changed = true;
+
+    return {
+      ...question,
+      subject: normalizedSubject,
+    };
+  });
+
+  return changed ? normalizedQuestions : [...questions];
 }
 
 function dispatchQuestionBankUpdatedEvent(): void {

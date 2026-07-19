@@ -5,6 +5,7 @@ import {
   QUESTION_BANK_TEMPLATE_HEADERS,
 } from './questionBankFields';
 import type { Question, QuestionType } from '../types/question';
+import { normalizeSubjectName } from '../constants/subjectOrder';
 import { getActiveQuestions } from './questionBankStorageService';
 
 type CsvRow = Record<string, string>;
@@ -249,7 +250,7 @@ export function toQuestion(row: CsvRow): Question {
     id: getField(row, QUESTION_BANK_FIELDS.id) || fallbackId,
     year: getField(row, QUESTION_BANK_FIELDS.year) || 'unknown',
     category: getField(row, QUESTION_BANK_FIELDS.category) || '未分類類科',
-    subject: getField(row, QUESTION_BANK_FIELDS.subject) || '未分類科目',
+    subject: normalizeSubjectName(getField(row, QUESTION_BANK_FIELDS.subject)),
     questionNumber: getField(row, QUESTION_BANK_FIELDS.questionNumber) || fallbackId,
     type: questionType,
     score,
