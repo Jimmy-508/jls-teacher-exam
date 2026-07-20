@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import PwaInstallCard from '../components/PwaInstallCard';
 import {
   APP_AUTHOR,
   APP_DESCRIPTION,
@@ -88,6 +89,8 @@ export default function SettingsPage() {
       </section>
 
       <AboutJlsCard />
+
+      <PwaInstallCard />
 
       <footer className="app-version-footer">
         <p>

@@ -70,6 +70,40 @@ a {
   color: #1c6758;
 }
 
+.pwa-banner {
+  position: fixed;
+  right: 12px;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  left: 12px;
+  z-index: 20;
+  width: min(100% - 24px, 680px);
+  margin: 0 auto;
+  padding: 14px;
+  border: 1px solid #b7d7ce;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 14px 34px rgba(16, 42, 67, 0.16);
+}
+
+.pwa-banner p {
+  color: #102a43;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+.pwa-banner--warning {
+  border-color: #f6ad55;
+  background: #fffaf0;
+}
+
+.pwa-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .home-page,
 .status-page,
 .result-page {

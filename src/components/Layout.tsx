@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import PwaStatusBanner from './PwaStatusBanner';
 
 export default function Layout() {
   return (
@@ -6,6 +7,7 @@ export default function Layout() {
       <main className="app-main">
         <Outlet />
       </main>
+      <PwaStatusBanner />
       <nav className="bottom-nav" aria-label="Primary navigation">
         <NavLink to="/">Today</NavLink>
         <NavLink to="/practice">Practice</NavLink>

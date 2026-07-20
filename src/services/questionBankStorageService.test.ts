@@ -122,6 +122,56 @@ describe('questionBankStorageService', () => {
     expect(indexedDb.replaceStoredQuestionBank).toHaveBeenCalled();
   });
 
+  it('upgrades an old default question bank version through the safe default loader', async () => {
+    indexedDb.metadata = {
+      id: 'active',
+      source: 'default',
+      updatedAt: '2026-07-16T00:00:00.000Z',
+      schemaVersion: 1,
+      questionCount: 1,
+      validation: { isValid: true, errors: [], warnings: [], summary: { totalQuestions: 1 } },
+      summary: { totalQuestions: 1 },
+      defaultBankVersion: '4.2.0',
+    };
+    indexedDb.questions = [{ id: 'OLD_DEFAULT', subject: 'subject' }];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        text: async () => validCsv.replace('Q1', 'NEW_DEFAULT'),
+      })),
+    );
+
+    const activeQuestionBank = await getActiveQuestionBank();
+
+    expect(activeQuestionBank.source).toBe('default');
+    expect(activeQuestionBank.questions[0].id).toBe('NEW_DEFAULT');
+    expect(activeQuestionBank.metadata.defaultBankVersion).toBe('4.3.0');
+  });
+
+  it('does not replace a user imported question bank when the app version changes', async () => {
+    indexedDb.metadata = {
+      id: 'active',
+      source: 'imported',
+      importedAt: '2026-07-16T00:00:00.000Z',
+      updatedAt: '2026-07-16T00:00:00.000Z',
+      schemaVersion: 1,
+      questionCount: 1,
+      validation: { isValid: true, errors: [], warnings: [], summary: { totalQuestions: 1 } },
+      summary: { totalQuestions: 1 },
+      defaultBankVersion: '4.2.0',
+    };
+    indexedDb.questions = [{ id: 'IMPORTED_Q1', subject: 'subject' }];
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const activeQuestionBank = await getActiveQuestionBank();
+
+    expect(activeQuestionBank.source).toBe('imported');
+    expect(activeQuestionBank.questions[0].id).toBe('IMPORTED_Q1');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('migrates legacy imported CSV and removes the legacy key only after storing it', async () => {
     storage.values.set(JLS_IMPORTED_QUESTION_BANK_STORAGE_KEY, {
       csvText: validCsv,

@@ -13,7 +13,7 @@ vi.mock('../services/learningProgressResetService', () => ({
 }));
 
 describe('SettingsPage', () => {
-  it('renders basic settings without AI or API key controls', () => {
+  it('renders basic settings, app info, and no AI or API key controls', () => {
     const html = renderToStaticMarkup(<SettingsPage />);
 
     expect(html).toContain('Settings');
@@ -21,9 +21,8 @@ describe('SettingsPage', () => {
     expect(html).toContain('placeholder="Jarvis"');
     expect(html).toContain('<details class="today-card about-jls-card">');
     expect(html).not.toContain('<details open');
-    expect(html).toContain('產品名稱');
-    expect(html).toContain('副標題');
-    expect(html).not.toContain('AI 分析引擎');
+    expect(html).toContain('Jarvis 教師資格考學習系統');
+    expect(html).toContain('v4.3');
     expect(html).not.toContain('OpenAI API Key');
     expect(html).not.toContain('Gemini');
     expect(html).not.toContain('Claude');
