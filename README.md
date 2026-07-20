@@ -92,3 +92,43 @@ Jimmy Lin
 - 系統：JLS（Jarvis Learning System）
 - 中文副標：Jarvis 教檢隨身考
 - 版本：v4.2
+
+## Windows 使用方式
+
+不需要手動輸入 `pnpm` 或 `npm` 指令，可直接雙擊下列批次檔：
+
+第一次安裝或修復依賴：
+
+```text
+install-jls.bat
+```
+
+平常開發：
+
+```text
+start-jls.bat
+```
+
+Production Build：
+
+```text
+build-jls.bat
+```
+
+Production Preview：
+
+```text
+preview-jls.bat
+```
+
+環境檢查：
+
+```text
+diagnose-jls.bat
+```
+
+正式發布 GitHub Pages：
+
+```text
+publish-github-pages.bat
+```
