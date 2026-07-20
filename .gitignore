@@ -16,3 +16,6 @@ coverage/
 Thumbs.db
 
 JLS_094_115_v4.2.1*.csv
+
+icon-source.png
+.temp-icon-backup/

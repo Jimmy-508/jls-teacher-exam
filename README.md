@@ -132,3 +132,26 @@ diagnose-jls.bat
 ```text
 publish-github-pages.bat
 ```
+## PWA 圖示更新
+
+若要更新 Android、iPhone/iPad 主畫面圖示與 PWA manifest 圖示，請依序操作：
+
+1. 將新的 PNG 圖示放在 Repository 根目錄。
+2. 檔名改成 `icon-source.png`。
+3. 雙擊 `update-icons.bat`。
+
+`update-icons.bat` 會自動產生 `public/icons/` 內的 favicon、Apple Touch Icon、一般 PWA 圖示、maskable 圖示與相容舊檔名的圖示，並在產生後執行 Production Build 驗證。若產生或 build 失敗，會還原原本的圖示。
+
+`icon-source.png` 是本機來源檔，已加入 `.gitignore`，不會被提交到 GitHub。正式提交只需要包含產生後的 `public/icons/` 圖示檔。
+
+## 手動檢查離線資源更新
+
+JLS 支援提示式 PWA 更新，不會在使用者作答中強制重新整理。
+
+可在：
+
+```text
+Settings → 關於 JLS → 離線資源更新
+```
+
+按下「檢查更新」。若偵測到新版本，畫面會顯示「立即更新」按鈕；只有使用者按下後才會套用新版 Service Worker 並重新載入。

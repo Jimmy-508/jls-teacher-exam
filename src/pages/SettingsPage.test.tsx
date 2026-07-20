@@ -12,6 +12,11 @@ vi.mock('../services/learningProgressResetService', () => ({
   resetLearningProgress: vi.fn(async () => undefined),
 }));
 
+vi.mock('../services/pwaService', () => ({
+  applyPwaUpdate: vi.fn(async () => undefined),
+  checkForPwaUpdate: vi.fn(async () => 'up-to-date'),
+}));
+
 describe('SettingsPage', () => {
   it('renders basic settings, app info, and no AI or API key controls', () => {
     const html = renderToStaticMarkup(<SettingsPage />);
@@ -23,6 +28,8 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('<details open');
     expect(html).toContain('Jarvis 教師資格考學習系統');
     expect(html).toContain('v4.3');
+    expect(html).toContain('離線資源更新');
+    expect(html).toContain('檢查更新');
     expect(html).not.toContain('OpenAI API Key');
     expect(html).not.toContain('Gemini');
     expect(html).not.toContain('Claude');

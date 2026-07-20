@@ -10,6 +10,7 @@ import {
   APP_VERSION,
 } from '../config/appInfo';
 import { resetLearningProgress } from '../services/learningProgressResetService';
+import { applyPwaUpdate, checkForPwaUpdate, type PwaUpdateCheckResult } from '../services/pwaService';
 import { DEFAULT_DISPLAY_NAME, getUserSettings, saveUserSettings } from '../services/userSettingsService';
 
 export default function SettingsPage() {
@@ -103,6 +104,21 @@ export default function SettingsPage() {
 }
 
 function AboutJlsCard() {
+  const [updateStatus, setUpdateStatus] = useState<PwaUpdateCheckResult | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+
+  async function handleCheckForUpdate() {
+    setIsCheckingUpdate(true);
+
+    try {
+      setUpdateStatus(await checkForPwaUpdate());
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  }
+
+  const updateStatusMessage = getPwaUpdateStatusMessage(updateStatus);
+
   return (
     <details className="today-card about-jls-card">
       <summary className="about-jls-card__summary">
@@ -131,6 +147,26 @@ function AboutJlsCard() {
             </div>
           </dl>
         </header>
+
+        <section className="about-jls-section about-jls-update">
+          <h3>離線資源更新</h3>
+          <p>手動檢查 JLS 是否有新的離線版本可用。</p>
+          <div className="about-jls-update__actions">
+            <button className="secondary-button" type="button" onClick={handleCheckForUpdate} disabled={isCheckingUpdate}>
+              {isCheckingUpdate ? '檢查中…' : '檢查更新'}
+            </button>
+            {updateStatus === 'update-available' ? (
+              <button className="primary-button" type="button" onClick={() => void applyPwaUpdate()}>
+                立即更新
+              </button>
+            ) : null}
+          </div>
+          {updateStatusMessage ? (
+            <p className="about-jls-update__status" role={updateStatus === 'error' ? 'alert' : 'status'} aria-live={updateStatus === 'error' ? 'assertive' : 'polite'}>
+              {updateStatusMessage}
+            </p>
+          ) : null}
+        </section>
 
         <AboutSection title="產品定位">
           <p>
@@ -165,4 +201,23 @@ function AboutSection({ title, children }: { title: string; children: ReactNode 
       {children}
     </section>
   );
+}
+
+function getPwaUpdateStatusMessage(status: PwaUpdateCheckResult | null): string {
+  switch (status) {
+    case 'up-to-date':
+      return '目前已是最新版本。';
+    case 'update-available':
+      return '偵測到新版本，可立即更新。';
+    case 'offline':
+      return '目前離線，請連線後再檢查更新。';
+    case 'unsupported':
+      return '此瀏覽器不支援離線更新檢查。';
+    case 'not-registered':
+      return '離線服務尚未完成註冊，請重新開啟 JLS 後再試。';
+    case 'error':
+      return '檢查更新失敗，請稍後再試。';
+    default:
+      return '';
+  }
 }
