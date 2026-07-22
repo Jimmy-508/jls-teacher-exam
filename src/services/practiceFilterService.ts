@@ -11,6 +11,7 @@ export interface PracticeFilters {
   subject: string;
   coreConcept: string;
   wrongQuestion: WrongQuestionFilter;
+  searchQuery?: string;
 }
 
 export interface PracticeFilterOptions {
@@ -24,6 +25,7 @@ export const DEFAULT_PRACTICE_FILTERS: PracticeFilters = {
   subject: '',
   coreConcept: '',
   wrongQuestion: 'all',
+  searchQuery: '',
 };
 
 const NEGATIVE_ANSWER_VALUES = new Set(['否', 'false', '0', 'no', 'n', 'wrong', 'incorrect', '錯', '答錯']);
@@ -82,6 +84,10 @@ export function filterPracticeQuestions(
       return false;
     }
 
+    if (!matchesPracticeSearch(question, filters.searchQuery ?? '')) {
+      return false;
+    }
+
     return true;
   });
 }
@@ -112,8 +118,50 @@ export function isWrongQuestion(question: Question, record?: LearningRecord): bo
   );
 }
 
+export function normalizePracticeSearchQuery(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+export function splitPracticeSearchKeywords(value: string): string[] {
+  return normalizePracticeSearchQuery(value)
+    .split(' ')
+    .map((keyword) => normalizePracticeSearchText(keyword))
+    .filter(Boolean);
+}
+
+export function matchesPracticeSearch(question: Question, searchQuery: string | undefined): boolean {
+  const keywords = splitPracticeSearchKeywords(searchQuery ?? '');
+
+  if (keywords.length === 0) {
+    return true;
+  }
+
+  const searchableFields = [
+    question.year,
+    question.questionNumber,
+    question.stem,
+    question.optionA,
+    question.optionB,
+    question.optionC,
+    question.optionD,
+  ]
+    .map((field) => normalizePracticeSearchText(field ?? ''))
+    .filter(Boolean);
+
+  return keywords.every((keyword) => searchableFields.some((field) => field.includes(keyword)));
+}
+
+function normalizePracticeSearchText(value: string): string {
+  return value.toLocaleLowerCase('en');
+}
+
+function formatPracticeSearchSummary(value: string): string {
+  const normalized = normalizePracticeSearchQuery(value);
+  return normalized.length > 18 ? normalized.slice(0, 18) + '\u2026' : normalized;
+}
+
 export function hasActivePracticeFilters(filters: PracticeFilters): boolean {
-  return Boolean(filters.year || filters.subject || filters.coreConcept || filters.wrongQuestion !== 'all');
+  return Boolean(filters.year || filters.subject || filters.coreConcept || filters.wrongQuestion !== 'all' || filters.searchQuery);
 }
 
 export function summarizePracticeFilters(filters: PracticeFilters): string[] {

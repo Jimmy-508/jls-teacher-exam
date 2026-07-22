@@ -27,6 +27,7 @@ import {
   buildPracticeFilterOptionsForFilters,
   filterPracticeQuestions,
   hasActivePracticeFilters,
+  normalizePracticeSearchQuery,
   normalizeWrongQuestionFilterForType,
   summarizePracticeFilters,
   type PracticeFilters,
@@ -130,7 +131,11 @@ export const DEFAULT_QUESTION_COUNT_BY_TYPE = {
   essay: 1,
   all: 5,
 } as const satisfies Record<PracticeQuestionTypeFilter, PracticeQuestionCount>;
-type PracticeCountMode = 'preset' | 'custom';
+
+export function getDefaultQuestionCountForType(typeFilter: PracticeQuestionTypeFilter): PracticeQuestionCount {
+  return DEFAULT_QUESTION_COUNT_BY_TYPE[typeFilter];
+}
+export type PracticeCountMode = 'preset' | 'custom';
 
 function isPracticeLocationState(value: unknown): value is PracticeLocationState {
   if (!value || typeof value !== 'object') {
@@ -163,6 +168,7 @@ export default function PracticePage() {
     subject: requestedSubject ?? '',
     coreConcept: requestedCoreConcept ?? '',
   }));
+  const [searchInput, setSearchInput] = useState('');
   const [questionCount, setQuestionCount] = useState<PracticeQuestionCount>(5);
   const [questionCountMode, setQuestionCountMode] = useState<PracticeCountMode>('preset');
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
@@ -201,7 +207,7 @@ export default function PracticePage() {
         const loadedQuestions = await loadQuestions();
         const savedRecords = (await load<Record<string, LearningRecord>>(LEARNING_RECORDS_STORAGE_KEY)) ?? {};
         const filteredQuestions = selectFilteredQuestions(loadedQuestions, savedRecords);
-        const safeQuestionCount = sanitizeCustomQuestionCount(questionCount, Math.max(filteredQuestions.length, 1));
+        const effectiveQuestionCount = getEffectivePracticeQuestionCount(questionCount, filteredQuestions.length);
         const savedSession = await load<PracticeSession>(ACTIVE_PRACTICE_SESSION_STORAGE_KEY);
         const shouldStartFocusedPractice = Boolean(
           requestedLearningTheme || requestedSubject || requestedCoreConcept || requestedQuestionIds?.length || hasActivePracticeFilters(filters),
@@ -213,14 +219,14 @@ export default function PracticePage() {
             typeFilter,
             shouldStartFocusedPractice,
             filteredQuestions,
-            safeQuestionCount,
+            effectiveQuestionCount,
           )
             ? savedSession
             : null;
         const practiceQuestions = selectPracticeQuestions({
           filteredQuestions,
           loadedQuestions,
-          questionCount: safeQuestionCount,
+          questionCount: effectiveQuestionCount,
           requestedLearningTheme,
           requestedQuestionIds,
           requestedSubject,
@@ -258,7 +264,6 @@ export default function PracticePage() {
         setQuestions(practiceQuestions);
         setAllQuestions(loadedQuestions);
         setLearningRecords(initializedRecords);
-        setQuestionCount(safeQuestionCount);
         setAnswers(session.answers);
         setPracticeSession(session);
         setCurrentIndex(Math.min(session.currentIndex, practiceQuestions.length - 1));
@@ -290,8 +295,29 @@ export default function PracticePage() {
   );
   const eligibleQuestionCount = useMemo(
     () => filterPracticeQuestions(allQuestions, filters, typeFilter, learningRecords).length,
-    [allQuestions, filters, learningRecords, typeFilter],
+    // Keep answer-state updates from rerunning the full text search while the user is answering.
+    // The count is refreshed when the question bank, filters, type, or applied search query changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allQuestions, filters, typeFilter],
   );
+
+  useEffect(() => {
+    if (questionCountMode !== 'custom' || eligibleQuestionCount <= 0) {
+      return;
+    }
+
+    const normalizedQuestionCount = normalizeCustomQuestionCount({
+      requestedCount: questionCount,
+      eligibleQuestionCount,
+    });
+
+    if (normalizedQuestionCount === questionCount) {
+      return;
+    }
+
+    void resetCurrentPracticeState();
+    setQuestionCount(normalizedQuestionCount);
+  }, [eligibleQuestionCount, questionCount, questionCountMode]);
   const currentQuestion = questions[currentIndex];
   const currentAnswer = useMemo(
     () => answers.find((answer) => answer.questionId === currentQuestion?.id),
@@ -305,12 +331,16 @@ export default function PracticePage() {
     () => getRequestedQuestionPool(allQuestions, requestedQuestionIds),
     [allQuestions, requestedQuestionIds],
   );
-  const emptyPracticeMessage = getEmptyPracticeMessage(typeFilter, requestedQuestionPool);
-  const settingsSummary = [
-    getPracticeTypeLabel(typeFilter),
-    `${questionCount} 題`,
-    ...summarizePracticeFilters(filters),
-  ].join(' · ');
+  const emptyPracticeMessage = getEmptyPracticeMessage(typeFilter, requestedQuestionPool, filters.searchQuery);
+  const displayedPracticeQuestionCount = getDisplayedPracticeQuestionCount({
+    configuredQuestionCount: questionCount,
+    eligibleQuestionCount,
+  });
+  const settingsSummary = buildPracticeSettingsSummary({
+    typeFilter,
+    questionCount: displayedPracticeQuestionCount,
+    filters,
+  });
 
   function selectFilteredQuestions(loadedQuestions: readonly Question[], savedRecords: Record<string, LearningRecord>): Question[] {
     return filterPracticeQuestions(loadedQuestions, filters, typeFilter, savedRecords);
@@ -518,7 +548,7 @@ export default function PracticePage() {
     }
 
     await resetCurrentPracticeState();
-    setQuestionCount(DEFAULT_QUESTION_COUNT_BY_TYPE[nextTypeFilter]);
+    setQuestionCount(getDefaultQuestionCountForType(nextTypeFilter));
     setQuestionCountMode('preset');
     if (normalizeWrongQuestionFilterForType(filters.wrongQuestion, nextTypeFilter) !== filters.wrongQuestion) {
       setFilters((current) => ({ ...current, wrongQuestion: 'all' }));
@@ -538,6 +568,25 @@ export default function PracticePage() {
   async function handleFiltersChange(nextFilters: PracticeFilters) {
     await resetCurrentPracticeState();
     setFilters(normalizePracticeFiltersForOptions(nextFilters, allQuestions));
+  }
+
+  async function handleApplySearch() {
+    const normalizedSearchQuery = normalizePracticeSearchQuery(searchInput);
+    await resetCurrentPracticeState();
+    setSearchInput(normalizedSearchQuery);
+    setFilters((currentFilters) =>
+      normalizePracticeFiltersForOptions({ ...currentFilters, searchQuery: normalizedSearchQuery }, allQuestions),
+    );
+  }
+
+  async function handleClearSearch() {
+    await resetCurrentPracticeState();
+    setSearchInput('');
+    setQuestionCount(getDefaultQuestionCountForType(typeFilter));
+    setQuestionCountMode('preset');
+    setFilters((currentFilters) =>
+      normalizePracticeFiltersForOptions({ ...currentFilters, searchQuery: '' }, allQuestions),
+    );
   }
 
   async function resetCurrentPracticeState() {
@@ -622,10 +671,16 @@ export default function PracticePage() {
             options={filterOptions}
             typeFilter={typeFilter}
             value={filters}
+            searchInput={searchInput}
+            searchResultCount={eligibleQuestionCount}
+            onApplySearch={() => void handleApplySearch()}
             onChange={(value) => void handleFiltersChange(value)}
+            onClearSearch={() => void handleClearSearch()}
+            onSearchInputChange={setSearchInput}
           />
           <PracticeTypeSelector value={typeFilter} onChange={(value) => void handlePracticeTypeChange(value)} />
           <PracticeCountSelector
+            actualPracticeQuestionCount={questions.length}
             maxCount={Math.max(eligibleQuestionCount, 1)}
             mode={questionCountMode}
             value={questionCount}
@@ -711,7 +766,7 @@ export function selectPracticeQuestions({
   typeFilter: PracticeQuestionTypeFilter;
 }): Question[] {
   if (requestedQuestionIds?.length) {
-    return drawPracticeQuestionsByIds(loadedQuestions, requestedQuestionIds, typeFilter, questionCount);
+    return drawPracticeQuestionsByIds(filteredQuestions, requestedQuestionIds, typeFilter, questionCount);
   }
 
   if (requestedLearningTheme) {
@@ -738,7 +793,23 @@ function getRequestedQuestionPool(questions: readonly Question[], requestedQuest
   return questions.filter((question) => requestedQuestionIdSet.has(question.id));
 }
 
-function getEmptyPracticeMessage(typeFilter: PracticeQuestionTypeFilter, requestedQuestionPool: readonly Question[]): string {
+function getEmptyPracticeMessage(
+  typeFilter: PracticeQuestionTypeFilter,
+  requestedQuestionPool: readonly Question[],
+  searchQuery = '',
+): string {
+  const normalizedSearchQuery = normalizePracticeSearchQuery(searchQuery);
+
+  if (normalizedSearchQuery) {
+    const keywords = normalizedSearchQuery.split(' ').filter(Boolean);
+
+    if (keywords.length > 1) {
+      return `找不到同時含有${keywords.map((keyword) => `「${keyword}」`).join('與')}且符合目前篩選條件的題目，請調整搜尋內容或篩選條件。`;
+    }
+
+    return `找不到含有「${normalizedSearchQuery}」且符合目前篩選條件的題目，請調整搜尋內容或篩選條件。`;
+  }
+
   if (requestedQuestionPool.length === 0) {
     return '請調整篩選條件。';
   }
@@ -761,12 +832,22 @@ export function PracticeFilterSelector({
   options,
   typeFilter,
   value,
+  searchInput = '',
+  searchResultCount = 0,
+  onApplySearch = () => undefined,
   onChange,
+  onClearSearch = () => undefined,
+  onSearchInputChange = () => undefined,
 }: {
   options: { years: string[]; subjects: string[]; coreConcepts: string[] };
   typeFilter: PracticeQuestionTypeFilter;
   value: PracticeFilters;
+  searchInput?: string;
+  searchResultCount?: number;
+  onApplySearch?: () => void;
   onChange: (value: PracticeFilters) => void;
+  onClearSearch?: () => void;
+  onSearchInputChange?: (value: string) => void;
 }) {
   return (
     <fieldset className="practice-type-selector">
@@ -829,6 +910,43 @@ export function PracticeFilterSelector({
           </option>
         </select>
       </label>
+      <div className="practice-search-field">
+        <span className="practice-search-field__label">{'\u641c\u5c0b\u984c\u76ee'}</span>
+        <div className="practice-search-field__control" role="search">
+          <span className="practice-search-field__icon" aria-hidden="true">
+            {'\uD83D\uDD0D'}
+          </span>
+          <div className="practice-search-field__input-wrap">
+            <input
+              aria-label={'\u641c\u5c0b\u984c\u76ee'}
+              enterKeyHint="search"
+              placeholder={'\u8f38\u5165\u95dc\u9375\u5b57\uff0c\u53ef\u7528\u7a7a\u767d\u5206\u9694'}
+              type="search"
+              value={searchInput}
+              onChange={(event) => onSearchInputChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  onApplySearch();
+                }
+              }}
+            />
+            {searchInput || value.searchQuery ? (
+              <button className="practice-search-field__clear" type="button" aria-label={'\u6e05\u9664\u641c\u5c0b'} onClick={onClearSearch}>
+                {'\u00d7'}
+              </button>
+            ) : null}
+          </div>
+          <button className="secondary-button practice-search-field__submit" type="button" onClick={onApplySearch}>
+            {'\u641c\u5c0b'}
+          </button>
+        </div>
+        {value.searchQuery ? (
+          <p className="practice-search-field__result">
+            {'\u641c\u5c0b\u300c'}{value.searchQuery}{'\u300d\u30fb\u7b26\u5408 '}{searchResultCount}{' \u984c'}
+          </p>
+        ) : null}
+      </div>
     </fieldset>
   );
 }
@@ -879,12 +997,14 @@ export function PracticeTypeSelector({
 }
 
 export function PracticeCountSelector({
+  actualPracticeQuestionCount,
   maxCount,
   mode,
   value,
   onChange,
   onModeChange,
 }: {
+  actualPracticeQuestionCount?: number;
   maxCount: number;
   mode: PracticeCountMode;
   value: PracticeQuestionCount;
@@ -892,13 +1012,21 @@ export function PracticeCountSelector({
   onModeChange: (value: PracticeCountMode) => void;
 }) {
   const [draftValue, setDraftValue] = useState(String(value));
+  const displayedSelection = getDisplayedQuestionCountSelection({
+    actualPracticeQuestionCount: actualPracticeQuestionCount ?? value,
+    configuredQuestionCount: value,
+    questionCountMode: mode,
+  });
 
   useEffect(() => {
     setDraftValue(String(value));
   }, [value, mode]);
 
   function commitCustomQuestionCount() {
-    const nextValue = sanitizeCustomQuestionCount(Number(draftValue), maxCount);
+    const nextValue = normalizeCustomQuestionCount({
+      requestedCount: Number(draftValue),
+      eligibleQuestionCount: maxCount,
+    });
     setDraftValue(String(nextValue));
     onChange(nextValue);
   }
@@ -909,13 +1037,13 @@ export function PracticeCountSelector({
       {practiceCountOptions.map((option) => (
         <label key={option}>
           <input
-            checked={mode === 'preset' && value === option}
+            checked={displayedSelection === option}
             name="practice-question-count"
             type="radio"
             value={option}
             onChange={() => {
               onModeChange('preset');
-              onChange(sanitizeCustomQuestionCount(option, maxCount));
+              onChange(option);
             }}
           />
           {option} 題
@@ -923,7 +1051,7 @@ export function PracticeCountSelector({
       ))}
       <label>
         <input
-          checked={mode === 'custom'}
+          checked={displayedSelection === 'custom'}
           name="practice-question-count"
           type="radio"
           value="custom"
@@ -935,7 +1063,6 @@ export function PracticeCountSelector({
         <input
           aria-label="自訂題數"
           className="practice-count-input"
-          max={maxCount}
           min={1}
           type="number"
           value={draftValue}
@@ -956,6 +1083,75 @@ export function sanitizeCustomQuestionCount(value: number, maxCount: number): nu
   const normalizedMaxCount = Math.max(1, Math.floor(maxCount));
   const normalizedValue = Number.isFinite(value) ? Math.floor(value) : 1;
   return Math.max(1, Math.min(normalizedValue, normalizedMaxCount));
+}
+
+export function sanitizeConfiguredQuestionCount(value: number): number {
+  const normalizedValue = Number.isFinite(value) ? Math.floor(value) : 1;
+  return Math.max(1, normalizedValue);
+}
+
+export function normalizeCustomQuestionCount({
+  requestedCount,
+  eligibleQuestionCount,
+}: {
+  requestedCount: number;
+  eligibleQuestionCount: number;
+}): PracticeQuestionCount {
+  return sanitizeCustomQuestionCount(requestedCount, Math.max(eligibleQuestionCount, 1));
+}
+
+export function getEffectivePracticeQuestionCount(questionCount: PracticeQuestionCount, eligibleQuestionCount: number): number {
+  return sanitizeCustomQuestionCount(questionCount, Math.max(eligibleQuestionCount, 1));
+}
+
+export function getDisplayedPracticeQuestionCount({
+  configuredQuestionCount,
+  eligibleQuestionCount,
+}: {
+  configuredQuestionCount: PracticeQuestionCount;
+  eligibleQuestionCount: number;
+}): number {
+  const normalizedEligibleQuestionCount = Number.isFinite(eligibleQuestionCount)
+    ? Math.max(0, Math.floor(eligibleQuestionCount))
+    : 0;
+
+  if (normalizedEligibleQuestionCount === 0) {
+    return 0;
+  }
+
+  return getEffectivePracticeQuestionCount(configuredQuestionCount, normalizedEligibleQuestionCount);
+}
+
+export function buildPracticeSettingsSummary({
+  typeFilter,
+  questionCount,
+  filters,
+}: {
+  typeFilter: PracticeQuestionTypeFilter;
+  questionCount: number;
+  filters: PracticeFilters;
+}): string {
+  return [getPracticeTypeLabel(typeFilter), `${questionCount} \u984C`, ...summarizePracticeFilters(filters)].join('\u30FB');
+}
+
+type DisplayedQuestionCountSelection = PracticeQuestionCount | 'custom' | null;
+
+export function getDisplayedQuestionCountSelection({
+  actualPracticeQuestionCount,
+  configuredQuestionCount,
+  questionCountMode,
+}: {
+  actualPracticeQuestionCount: number;
+  configuredQuestionCount: PracticeQuestionCount;
+  questionCountMode: PracticeCountMode;
+}): DisplayedQuestionCountSelection {
+  const normalizedActualCount = sanitizeConfiguredQuestionCount(actualPracticeQuestionCount);
+
+  if (questionCountMode === 'custom') {
+    return configuredQuestionCount === normalizedActualCount ? 'custom' : null;
+  }
+
+  return practiceCountOptions.includes(normalizedActualCount) ? normalizedActualCount : null;
 }
 
 export function canUseRestoredPracticeSession(

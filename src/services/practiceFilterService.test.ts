@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { LearningRecord } from '../types/LearningRecord';
 import type { Question } from '../types/question';
+import { ESSAY_QUESTION_TYPE } from './questionBankFields';
 import {
   DEFAULT_PRACTICE_FILTERS,
   buildPracticeFilterOptions,
   buildPracticeFilterOptionsForFilters,
   filterPracticeQuestions,
   isWrongQuestion,
+  matchesPracticeSearch,
+  normalizePracticeSearchQuery,
   normalizeWrongQuestionFilterForType,
   sortCoreConcepts,
 } from './practiceFilterService';
@@ -214,6 +217,85 @@ describe('practiceFilterService', () => {
 
     expect(filterPracticeQuestions(questions, { ...DEFAULT_PRACTICE_FILTERS, wrongQuestion: 'wrongOnly' }, 'essay')).toHaveLength(2);
   });
+
+  it('normalizes practice search input spacing', () => {
+    expect(normalizePracticeSearchQuery('  112   Piaget  ')).toBe('112 Piaget');
+  });
+
+  it('matches a single keyword across stem and options only', () => {
+    expect(matchesPracticeSearch(createQuestion({ stem: 'Piaget conservation task' }), 'Piaget')).toBe(true);
+    expect(matchesPracticeSearch(createQuestion({ optionA: 'Piaget theory' }), 'piaget')).toBe(true);
+    expect(matchesPracticeSearch(createQuestion({ optionB: 'Kohlberg stage' }), 'Kohlberg')).toBe(true);
+    expect(matchesPracticeSearch(createQuestion({ optionC: 'scaffold hint' }), 'scaffold')).toBe(true);
+    expect(matchesPracticeSearch(createQuestion({ optionD: 'literacy item' }), 'literacy')).toBe(true);
+  });
+
+  it('matches year, question number, and English text case-insensitively', () => {
+    const question = createQuestion({ year: '108-2', questionNumber: '25', stem: 'PIAGET learning task' });
+
+    expect(matchesPracticeSearch(question, '108-2')).toBe(true);
+    expect(matchesPracticeSearch(question, '25')).toBe(true);
+    expect(matchesPracticeSearch(question, 'piaget')).toBe(true);
+  });
+
+  it('requires every keyword while allowing different fields to satisfy them', () => {
+    const question = createQuestion({ year: '112', stem: 'Piaget conservation task' });
+
+    expect(matchesPracticeSearch(question, '112 Piaget')).toBe(true);
+    expect(matchesPracticeSearch(question, '112 Kohlberg')).toBe(false);
+  });
+
+  it('does not restrict questions for blank search and handles essay empty options', () => {
+    const essay = createQuestion({ type: ESSAY_QUESTION_TYPE, optionA: '', optionB: '', optionC: '', optionD: '', stem: 'Essay literacy prompt' });
+
+    expect(matchesPracticeSearch(essay, '   ')).toBe(true);
+    expect(matchesPracticeSearch(essay, 'literacy')).toBe(true);
+    expect(matchesPracticeSearch(essay, 'notfound')).toBe(false);
+  });
+
+  it('applies search as an intersection with year, subject, core concept, wrong mode, and type', () => {
+    const questions = [
+      createQuestion({ id: 'Q1', year: '112', subject: 'Subject A', coreConcept: 'Cognitive', stem: 'Piaget task', isCorrect: 'wrong' }),
+      createQuestion({ id: 'Q2', year: '112', subject: 'Subject A', coreConcept: 'Cognitive', stem: 'Kohlberg task', isCorrect: 'wrong' }),
+      createQuestion({ id: 'Q3', year: '113', subject: 'Subject A', coreConcept: 'Cognitive', stem: 'Piaget task', isCorrect: 'wrong' }),
+      createQuestion({ id: 'Q4', year: '112', subject: 'Subject B', coreConcept: 'Cognitive', stem: 'Piaget task', isCorrect: 'wrong' }),
+      createQuestion({ id: 'Q5', year: '112', subject: 'Subject A', coreConcept: 'Behavioral', stem: 'Piaget task', isCorrect: 'wrong' }),
+    ];
+
+    expect(
+      filterPracticeQuestions(
+        questions,
+        {
+          ...DEFAULT_PRACTICE_FILTERS,
+          year: '112',
+          subject: 'Subject A',
+          coreConcept: 'Cognitive',
+          wrongQuestion: 'wrongOnly',
+          searchQuery: 'Piaget',
+        },
+        'choice',
+      ).map((question) => question.id),
+    ).toEqual(['Q1']);
+  });
+
+  it('does not search correct answers, explanations, core concepts, learning themes, or shortcut keywords', () => {
+    const question = createQuestion({
+      stem: 'plain stem',
+      optionA: 'plain A',
+      optionB: 'plain B',
+      optionC: 'plain C',
+      optionD: 'plain D',
+      correctAnswer: 'A',
+      coreConcept: 'Piaget',
+      learningTheme: 'Piaget',
+      stemAnalysis: 'Piaget',
+      optionAAnalysis: 'Piaget',
+      shortcutKeywords: 'Piaget',
+    });
+
+    expect(matchesPracticeSearch(question, 'Piaget')).toBe(false);
+  });
+
 });
 
 function createQuestion(overrides: Partial<Question> = {}): Question {
