@@ -1712,14 +1712,18 @@ p {
 
 @media (max-width: 520px) {
   .practice-search-field__control {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: 6px;
   }
 
   .practice-search-field__input-wrap {
-    flex-basis: calc(100% - 32px);
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .practice-search-field__submit {
-    margin-left: 32px;
+    flex: 0 0 auto;
+    margin-left: 0;
+    padding-inline: 14px;
   }
 }
