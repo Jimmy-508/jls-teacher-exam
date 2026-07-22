@@ -1638,12 +1638,15 @@ p {
 }
 
 .practice-search-field__label {
+  flex: 0 0 auto;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .practice-search-field__control {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 8px;
   min-width: 0;
   width: 100%;
@@ -1657,7 +1660,7 @@ p {
 
 .practice-search-field__input-wrap {
   position: relative;
-  flex: 1 1 220px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1716,10 +1719,6 @@ p {
     gap: 6px;
   }
 
-  .practice-search-field__input-wrap {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
 
   .practice-search-field__submit {
     flex: 0 0 auto;

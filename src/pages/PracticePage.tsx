@@ -911,13 +911,16 @@ export function PracticeFilterSelector({
         </select>
       </label>
       <div className="practice-search-field">
-        <span className="practice-search-field__label">{'\u641c\u5c0b\u984c\u76ee'}</span>
         <div className="practice-search-field__control" role="search">
           <span className="practice-search-field__icon" aria-hidden="true">
             {'\uD83D\uDD0D'}
           </span>
+          <label className="practice-search-field__label" htmlFor="practice-search-input">
+            {'\u641c\u5c0b\u984c\u76ee'}
+          </label>
           <div className="practice-search-field__input-wrap">
             <input
+              id="practice-search-input"
               aria-label={'\u641c\u5c0b\u984c\u76ee'}
               enterKeyHint="search"
               placeholder={'\u8f38\u5165\u95dc\u9375\u5b57\uff0c\u53ef\u7528\u7a7a\u767d\u5206\u9694'}

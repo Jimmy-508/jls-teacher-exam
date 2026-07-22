@@ -143,6 +143,8 @@ describe('PracticePage controls', () => {
     expect(html).toContain('practice-search-field');
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('type="search"');
+    expect(html).toContain('id="practice-search-input"');
+    expect(html).toContain('for="practice-search-input"');
     expect(html).toContain('enterKeyHint="search"');
     expect(html).toContain(
       'aria-label="' + searchLabel + '"',
@@ -155,6 +157,9 @@ describe('PracticePage controls', () => {
     );
     expect(html).toContain(resultText);
     expect(html.match(new RegExp('aria-label=\"' + clearLabel + '\"', 'g'))).toHaveLength(1);
+    expect(html.indexOf('practice-search-field__icon')).toBeLessThan(html.indexOf('practice-search-field__label'));
+    expect(html.indexOf('practice-search-field__label')).toBeLessThan(html.indexOf('practice-search-field__input-wrap'));
+    expect(html.indexOf('practice-search-field__input-wrap')).toBeLessThan(html.indexOf('practice-search-field__submit'));
   });
 
   it('does not show clear button or result text before search is entered or applied', () => {

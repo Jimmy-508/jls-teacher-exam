@@ -21,4 +21,13 @@ describe('responsive styles', () => {
     expect(styles).toMatch(/\.answer-panel__headline\s*\{[^}]*overflow-wrap:\s*anywhere;/s);
     expect(styles).toMatch(/\.elimination-feedback__line\s*\{[^}]*display:\s*block;/s);
   });
+
+  it('keeps the Practice search controls on one row on narrow screens', () => {
+    expect(styles).toMatch(/\.practice-search-field__control\s*\{[^}]*flex-wrap:\s*nowrap;/s);
+    expect(styles).toMatch(/@media \(max-width: 520px\)\s*\{[^}]*\.practice-search-field__control\s*\{[^}]*flex-wrap:\s*nowrap;/s);
+    expect(styles).toMatch(/\.practice-search-field__label\s*\{[^}]*white-space:\s*nowrap;/s);
+    expect(styles).toMatch(/\.practice-search-field__input-wrap\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*0;/s);
+    expect(styles).toMatch(/\.practice-search-field__submit\s*\{[^}]*flex:\s*0 0 auto;[^}]*white-space:\s*nowrap;/s);
+    expect(styles).not.toMatch(/\.practice-search-field__submit\s*\{[^}]*width:\s*100%;/s);
+  });
 });
