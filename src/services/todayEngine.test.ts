@@ -12,6 +12,7 @@ import {
   getThemeLearningStats,
   getTodayFocus,
   getTodayRecommendation,
+  selectLeastPracticedTheme,
   selectRelativelyHighWrongTheme,
 } from './todayEngine';
 
@@ -90,8 +91,9 @@ describe('todayEngine', () => {
   it('selects a reasonable recommendation when every wrong count is zero', () => {
     const recommendation = getTodayRecommendation(null, themes, [], () => 0);
 
-    expect(recommendation?.title).toBe('建議練習：性別教育');
-    expect(recommendation?.targetQuestionIds).toEqual(['q1', 'q2']);
+    expect(recommendation?.title).toBe('\u5efa\u8b70\u7df4\u7fd2\uff1a\u5f62\u6210\u6027\u8a55\u91cf');
+    expect(recommendation?.description).toBe('\u9019\u500b\u4e3b\u984c\u7684\u7df4\u7fd2\u91cf\u6216\u719f\u6089\u5ea6\u4ecd\u6709\u88dc\u5f37\u7a7a\u9593\uff0c\u5efa\u8b70\u5b89\u6392\u4e00\u8f2a\u7df4\u7fd2\u3002');
+    expect(recommendation?.targetQuestionIds).toEqual(['q3']);
   });
 
   it('allows recommendation to be the same theme as Today focus', () => {
@@ -123,6 +125,99 @@ describe('todayEngine', () => {
     ];
 
     expect(selectRelativelyHighWrongTheme(candidates, () => 0.99).theme.name).toBe('認知策略');
+  });
+
+  it('includes every low-practice focus candidate instead of only the top three', () => {
+    const candidates = [
+      createThemeCandidate('focus-a', 'Focus A', 0, 3, 1),
+      createThemeCandidate('focus-b', 'Focus B', 0, 2, 0),
+      createThemeCandidate('focus-c', 'Focus C', 1, 1, 0),
+      createThemeCandidate('focus-d', 'Focus D', 1, 2, 0),
+      createThemeCandidate('focus-e', 'Focus E', 1, 3, 0),
+    ];
+
+    expect(selectLeastPracticedTheme(candidates, () => 0.999).theme.name).toBe('Focus E');
+  });
+
+  it('weights lower-practice focus candidates higher than candidates practiced one more time', () => {
+    const candidates = [
+      createThemeCandidate('focus-low', 'Focus Low', 0, 3, 0),
+      createThemeCandidate('focus-plus-one', 'Focus Plus One', 1, 3, 0),
+    ];
+
+    expect(selectLeastPracticedTheme(candidates, () => 0.55).theme.name).toBe('Focus Low');
+  });
+
+  it('returns the only low-practice candidate when there is one candidate', () => {
+    const candidates = [createThemeCandidate('focus-only', 'Focus Only', 0, 4, 0)];
+
+    expect(selectLeastPracticedTheme(candidates, () => 0.999).theme.name).toBe('Focus Only');
+  });
+
+  it('keeps focus priority for low practice, low familiarity, and higher wrong counts', () => {
+    const candidates = [
+      createThemeCandidate('focus-a', 'Focus Strong', 0, 1, 3),
+      createThemeCandidate('focus-b', 'Focus Familiar', 0, 1, 0),
+      createThemeCandidate('focus-c', 'Focus High', 0, 4, 0),
+    ];
+
+    expect(selectLeastPracticedTheme(candidates, () => 0).theme.name).toBe('Focus Strong');
+  });
+
+  it('includes every high-wrong recommendation candidate within the threshold', () => {
+    const candidates = [
+      createThemeCandidate('wrong-a', 'Wrong 10', 6, 3, 10),
+      createThemeCandidate('wrong-b', 'Wrong 9', 6, 3, 9),
+      createThemeCandidate('wrong-c', 'Wrong 8 A', 6, 1, 8),
+      createThemeCandidate('wrong-d', 'Wrong 8 B', 6, 2, 8),
+      createThemeCandidate('wrong-e', 'Wrong 8 C', 6, 3, 8),
+    ];
+
+    expect(selectRelativelyHighWrongTheme(candidates, () => 0.999).theme.name).toBe('Wrong 8 C');
+  });
+
+  it('weights higher wrong-count recommendation candidates more strongly', () => {
+    const candidates = [
+      createThemeCandidate('wrong-high', 'Wrong High', 6, 3, 10),
+      createThemeCandidate('wrong-low', 'Wrong Threshold', 6, 3, 8),
+    ];
+
+    expect(selectRelativelyHighWrongTheme(candidates, () => 0.65).theme.name).toBe('Wrong High');
+  });
+
+  it('never selects high-wrong recommendation themes outside the wrong-count threshold', () => {
+    const candidates = [
+      createThemeCandidate('wrong-a', 'Wrong 10', 6, 3, 10),
+      createThemeCandidate('wrong-b', 'Wrong 9', 6, 3, 9),
+      createThemeCandidate('wrong-c', 'Wrong 8', 6, 3, 8),
+      createThemeCandidate('wrong-outside', 'Wrong 7', 0, 1, 7),
+    ];
+
+    expect(selectRelativelyHighWrongTheme(candidates, () => 0.999).theme.name).toBe('Wrong 8');
+  });
+
+  it('allows every no-wrong recommendation theme to enter the weighted pool', () => {
+    const noWrongThemes = [
+      createTheme('zero-a', 'education', 'Zero A', ['q1'], 1),
+      createTheme('zero-b', 'education', 'Zero B', ['q2'], 2),
+      createTheme('zero-c', 'education', 'Zero C', ['q3'], 3),
+      createTheme('zero-d', 'education', 'Zero D', ['q4'], 4),
+      createTheme('zero-e', 'education', 'Zero E', ['q5'], 5),
+    ];
+    const recommendation = getTodayRecommendation(null, noWrongThemes, [], () => 0.999);
+
+    expect(recommendation?.targetKnowledgeNode).toBe('Zero E');
+    expect(recommendation?.title).toBe('\u5efa\u8b70\u7df4\u7fd2\uff1aZero E');
+    expect(recommendation?.description).toBe('\u9019\u500b\u4e3b\u984c\u7684\u7df4\u7fd2\u91cf\u6216\u719f\u6089\u5ea6\u4ecd\u6709\u88dc\u5f37\u7a7a\u9593\uff0c\u5efa\u8b70\u5b89\u6392\u4e00\u8f2a\u7df4\u7fd2\u3002');
+  });
+
+  it('weights no-wrong recommendation themes by lower familiarity and lower practice count', () => {
+    const candidates = [
+      createThemeCandidate('zero-strong', 'Zero Strong', 0, 1, 0),
+      createThemeCandidate('zero-weak', 'Zero Weak', 3, 5, 0),
+    ];
+
+    expect(selectRelativelyHighWrongTheme(candidates, () => 0.65).theme.name).toBe('Zero Strong');
   });
 
   it('keeps the same DailyMotto for the same date', () => {
@@ -270,6 +365,24 @@ function createTheme(
     essayQuestionCount: 0,
     wrongCount: 0,
     averageFamiliarity,
+  };
+}
+
+function createThemeCandidate(
+  id: string,
+  name: string,
+  practiceCount: number,
+  averageFamiliarity: number,
+  wrongCount: number,
+): { theme: LearningTheme; stats: ReturnType<typeof getThemeLearningStats> } {
+  return {
+    theme: createTheme(id, 'education', name, [id + '-q'], averageFamiliarity),
+    stats: {
+      practiceCount,
+      wrongCount,
+      averageFamiliarity,
+      lastReviewTime: 0,
+    },
   };
 }
 

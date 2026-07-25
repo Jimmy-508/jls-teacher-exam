@@ -220,10 +220,13 @@ export function selectLeastPracticedTheme<T extends { theme: LearningTheme; stat
 ): T {
   const sortedThemes = [...themes].sort(compareLeastPracticedTheme);
   const lowestPracticeCount = sortedThemes[0].stats.practiceCount;
-  const candidatePool = sortedThemes.filter((item) => item.stats.practiceCount <= lowestPracticeCount + 1).slice(0, 3);
-  const selectedIndex = Math.min(candidatePool.length - 1, Math.floor(random() * candidatePool.length));
+  const candidatePool = sortedThemes.filter((item) => item.stats.practiceCount <= lowestPracticeCount + 1);
 
-  return candidatePool[selectedIndex];
+  return selectWeightedRandom(
+    candidatePool,
+    (item) => getLeastPracticedThemeWeight(item, lowestPracticeCount),
+    random,
+  );
 }
 
 export function selectMostWrongTheme(
@@ -241,13 +244,19 @@ export function selectRelativelyHighWrongTheme<T extends { theme: LearningTheme;
 ): T {
   const sortedThemes = [...themes].sort(compareMostWrongTheme);
   const highestWrongCount = sortedThemes[0].stats.wrongCount;
-  const candidatePool =
-    highestWrongCount > 0
-      ? sortedThemes.filter((item) => item.stats.wrongCount >= Math.max(1, highestWrongCount - 2)).slice(0, 3)
-      : sortedThemes.slice(0, 3);
-  const selectedIndex = Math.min(candidatePool.length - 1, Math.floor(random() * candidatePool.length));
 
-  return candidatePool[selectedIndex];
+  if (highestWrongCount > 0) {
+    const wrongThreshold = Math.max(1, highestWrongCount - 2);
+    const candidatePool = sortedThemes.filter((item) => item.stats.wrongCount >= wrongThreshold);
+
+    return selectWeightedRandom(
+      candidatePool,
+      (item) => getHighWrongThemeWeight(item, wrongThreshold),
+      random,
+    );
+  }
+
+  return selectWeightedRandom(sortedThemes, getNoWrongThemeWeight, random);
 }
 
 export function getGreeting(displayName?: string, date = new Date()): string {
@@ -276,6 +285,58 @@ function toTodayFocus(theme: LearningTheme, questionIds: string[], reason: strin
     estimatedMinutes: Math.min(questionIds.length, TODAY_QUESTION_LIMIT) * MINUTES_PER_QUESTION,
     reason,
   };
+}
+
+function selectWeightedRandom<T>(items: readonly T[], getWeight: (item: T) => number, random: () => number): T {
+  if (items.length === 0) {
+    throw new Error('Cannot select from an empty candidate pool.');
+  }
+
+  if (items.length === 1) {
+    return items[0];
+  }
+
+  const weights = items.map((item) => normalizeWeight(getWeight(item)));
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const normalizedRandom = Math.min(Math.max(random(), 0), 0.999999999999);
+  const targetWeight = normalizedRandom * totalWeight;
+  let cumulativeWeight = 0;
+
+  for (let index = 0; index < items.length; index += 1) {
+    cumulativeWeight += weights[index];
+    if (targetWeight < cumulativeWeight) {
+      return items[index];
+    }
+  }
+
+  return items[items.length - 1];
+}
+
+function normalizeWeight(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+function getLeastPracticedThemeWeight(item: { stats: ThemeLearningStats }, lowestPracticeCount: number): number {
+  const practiceWeight = item.stats.practiceCount === lowestPracticeCount ? 4 : 2;
+  const familiarityWeight = Math.max(0, 5 - item.stats.averageFamiliarity);
+  const wrongWeight = Math.min(3, Math.max(0, item.stats.wrongCount));
+
+  return 1 + practiceWeight + familiarityWeight + wrongWeight;
+}
+
+function getHighWrongThemeWeight(item: { stats: ThemeLearningStats }, wrongThreshold: number): number {
+  const wrongWeight = 1 + Math.max(0, item.stats.wrongCount - wrongThreshold) * 3;
+  const familiarityWeight = Math.max(0, 5 - item.stats.averageFamiliarity);
+  const lowPracticeWeight = Math.max(0, 2 - Math.min(2, item.stats.practiceCount));
+
+  return 1 + wrongWeight + familiarityWeight + lowPracticeWeight;
+}
+
+function getNoWrongThemeWeight(item: { stats: ThemeLearningStats }): number {
+  const familiarityWeight = Math.max(0, 5 - item.stats.averageFamiliarity);
+  const lowPracticeWeight = Math.max(0, 3 - Math.min(3, item.stats.practiceCount));
+
+  return 1 + familiarityWeight + lowPracticeWeight;
 }
 
 function compareLeastPracticedTheme<T extends { theme: LearningTheme; stats: ThemeLearningStats }>(left: T, right: T): number {
