@@ -162,6 +162,7 @@ export default function PracticePage() {
   const requestedLearningTheme = practiceLocationState.learningTheme;
   const requestedSubject = practiceLocationState.subject;
   const requestedQuestionIds = practiceLocationState.questionIds;
+  const isTodayFocusedPractice = isTodayQuestionIdPracticeScope(practiceLocationState);
   const [typeFilter, setTypeFilter] = useState<PracticeQuestionTypeFilter>('choice');
   const [filters, setFilters] = useState<PracticeFilters>(() => ({
     ...DEFAULT_PRACTICE_FILTERS,
@@ -207,7 +208,12 @@ export default function PracticePage() {
         const loadedQuestions = await loadQuestions();
         const savedRecords = (await load<Record<string, LearningRecord>>(LEARNING_RECORDS_STORAGE_KEY)) ?? {};
         const filteredQuestions = selectFilteredQuestions(loadedQuestions, savedRecords);
-        const effectiveQuestionCount = getEffectivePracticeQuestionCount(questionCount, filteredQuestions.length);
+        const practiceQuestionCountLimit = getScopedEligibleQuestionCount({
+          filteredQuestions,
+          requestedQuestionIds,
+          shouldLimitToRequestedQuestionIds: isTodayFocusedPractice,
+        });
+        const effectiveQuestionCount = getEffectivePracticeQuestionCount(questionCount, practiceQuestionCountLimit);
         const savedSession = await load<PracticeSession>(ACTIVE_PRACTICE_SESSION_STORAGE_KEY);
         const shouldStartFocusedPractice = Boolean(
           requestedLearningTheme || requestedSubject || requestedCoreConcept || requestedQuestionIds?.length || hasActivePracticeFilters(filters),
@@ -287,28 +293,47 @@ export default function PracticePage() {
     return () => {
       isMounted = false;
     };
-  }, [requestedCoreConcept, requestedLearningTheme, requestedQuestionIds, requestedSubject, typeFilter, questionCount, filters]);
+  }, [
+    requestedCoreConcept,
+    requestedLearningTheme,
+    requestedQuestionIds,
+    requestedSubject,
+    isTodayFocusedPractice,
+    typeFilter,
+    questionCount,
+    filters,
+  ]);
 
   const filterOptions = useMemo(
     () => buildPracticeFilterOptionsForFilters(allQuestions, filters),
     [allQuestions, filters],
   );
-  const eligibleQuestionCount = useMemo(
-    () => filterPracticeQuestions(allQuestions, filters, typeFilter, learningRecords).length,
+  const eligibleQuestions = useMemo(
+    () => filterPracticeQuestions(allQuestions, filters, typeFilter, learningRecords),
     // Keep answer-state updates from rerunning the full text search while the user is answering.
     // The count is refreshed when the question bank, filters, type, or applied search query changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allQuestions, filters, typeFilter],
   );
+  const eligibleQuestionCount = eligibleQuestions.length;
+  const effectiveEligibleQuestionCount = useMemo(
+    () =>
+      getScopedEligibleQuestionCount({
+        filteredQuestions: eligibleQuestions,
+        requestedQuestionIds,
+        shouldLimitToRequestedQuestionIds: isTodayFocusedPractice,
+      }),
+    [eligibleQuestions, requestedQuestionIds, isTodayFocusedPractice],
+  );
 
   useEffect(() => {
-    if (questionCountMode !== 'custom' || eligibleQuestionCount <= 0) {
+    if (questionCountMode !== 'custom' || effectiveEligibleQuestionCount <= 0) {
       return;
     }
 
     const normalizedQuestionCount = normalizeCustomQuestionCount({
       requestedCount: questionCount,
-      eligibleQuestionCount,
+      eligibleQuestionCount: effectiveEligibleQuestionCount,
     });
 
     if (normalizedQuestionCount === questionCount) {
@@ -317,7 +342,7 @@ export default function PracticePage() {
 
     void resetCurrentPracticeState();
     setQuestionCount(normalizedQuestionCount);
-  }, [eligibleQuestionCount, questionCount, questionCountMode]);
+  }, [effectiveEligibleQuestionCount, questionCount, questionCountMode]);
   const currentQuestion = questions[currentIndex];
   const currentAnswer = useMemo(
     () => answers.find((answer) => answer.questionId === currentQuestion?.id),
@@ -334,7 +359,7 @@ export default function PracticePage() {
   const emptyPracticeMessage = getEmptyPracticeMessage(typeFilter, requestedQuestionPool, filters.searchQuery);
   const displayedPracticeQuestionCount = getDisplayedPracticeQuestionCount({
     configuredQuestionCount: questionCount,
-    eligibleQuestionCount,
+    eligibleQuestionCount: effectiveEligibleQuestionCount,
   });
   const settingsSummary = buildPracticeSettingsSummary({
     typeFilter,
@@ -681,7 +706,7 @@ export default function PracticePage() {
           <PracticeTypeSelector value={typeFilter} onChange={(value) => void handlePracticeTypeChange(value)} />
           <PracticeCountSelector
             actualPracticeQuestionCount={questions.length}
-            maxCount={Math.max(eligibleQuestionCount, 1)}
+            maxCount={Math.max(effectiveEligibleQuestionCount, 1)}
             mode={questionCountMode}
             value={questionCount}
             onChange={(value) => void handleQuestionCountChange(value)}
@@ -782,6 +807,35 @@ export function selectPracticeQuestions({
 
 function getPracticeTypeLabel(value: PracticeQuestionTypeFilter): string {
   return practiceTypeOptions.find((option) => option.value === value)?.label ?? '選擇題';
+}
+
+export function isTodayQuestionIdPracticeScope({
+  fromToday,
+  fromTodayRecommendation,
+  questionIds,
+}: {
+  fromToday?: boolean;
+  fromTodayRecommendation?: boolean;
+  questionIds?: readonly string[];
+}): boolean {
+  return Boolean((fromToday || fromTodayRecommendation) && questionIds?.length);
+}
+
+export function getScopedEligibleQuestionCount({
+  filteredQuestions,
+  requestedQuestionIds,
+  shouldLimitToRequestedQuestionIds,
+}: {
+  filteredQuestions: readonly Question[];
+  requestedQuestionIds?: readonly string[];
+  shouldLimitToRequestedQuestionIds: boolean;
+}): number {
+  if (!shouldLimitToRequestedQuestionIds || !requestedQuestionIds?.length) {
+    return filteredQuestions.length;
+  }
+
+  const requestedQuestionIdSet = new Set(requestedQuestionIds);
+  return filteredQuestions.filter((question) => requestedQuestionIdSet.has(question.id)).length;
 }
 
 function getRequestedQuestionPool(questions: readonly Question[], requestedQuestionIds?: readonly string[]): Question[] {

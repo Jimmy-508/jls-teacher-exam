@@ -13,8 +13,10 @@ import {
   getDisplayedPracticeQuestionCount,
   getDisplayedQuestionCountSelection,
   getEffectivePracticeQuestionCount,
+  getScopedEligibleQuestionCount,
   normalizeCustomQuestionCount,
   normalizePracticeFiltersForOptions,
+  isTodayQuestionIdPracticeScope,
   practiceCountOptions,
   sanitizeCustomQuestionCount,
   selectPracticeQuestions,
@@ -298,6 +300,156 @@ describe('PracticePage controls', () => {
         expect(summary).not.toContain(`\u9078\u64c7\u984c\u30fb${configuredQuestionCount} \u984c`);
       }
     }
+  });
+
+  it('limits Today-scoped practice counts to requested question ids', () => {
+    const questions = [
+      createQuestion('T1'),
+      createQuestion('T2'),
+      createQuestion('T3'),
+      createQuestion('T4'),
+      createQuestion('T5'),
+    ];
+    const requestedQuestionIds = ['T1', 'T2', 'T3'];
+    const filteredQuestions = filterPracticeQuestions(questions, DEFAULT_PRACTICE_FILTERS, 'choice');
+    const scopedEligibleQuestionCount = getScopedEligibleQuestionCount({
+      filteredQuestions,
+      requestedQuestionIds,
+      shouldLimitToRequestedQuestionIds: isTodayQuestionIdPracticeScope({ fromToday: true, questionIds: requestedQuestionIds }),
+    });
+    const effectiveQuestionCount = getEffectivePracticeQuestionCount(5, scopedEligibleQuestionCount);
+    const practiceQuestions = selectPracticeQuestions({
+      filteredQuestions,
+      loadedQuestions: questions,
+      questionCount: effectiveQuestionCount,
+      requestedQuestionIds,
+      restoredSession: null,
+      typeFilter: 'choice',
+    });
+    const summary = buildPracticeSettingsSummary({
+      typeFilter: 'choice',
+      questionCount: getDisplayedPracticeQuestionCount({
+        configuredQuestionCount: 5,
+        eligibleQuestionCount: scopedEligibleQuestionCount,
+      }),
+      filters: DEFAULT_PRACTICE_FILTERS,
+    });
+
+    expect(scopedEligibleQuestionCount).toBe(3);
+    expect(effectiveQuestionCount).toBe(3);
+    expect(practiceQuestions).toHaveLength(3);
+    expect(practiceQuestions.every((question) => requestedQuestionIds.includes(question.id))).toBe(true);
+    expect(summary).toContain('\u9078\u64c7\u984c\u30fb3 \u984c');
+    expect(summary).not.toContain('\u9078\u64c7\u984c\u30fb5 \u984c');
+  });
+
+  it('keeps direct Practice counts based on the full eligible question pool', () => {
+    const questions = Array.from({ length: 8 }, (_, index) => createQuestion(`D${index + 1}`));
+    const filteredQuestions = filterPracticeQuestions(questions, DEFAULT_PRACTICE_FILTERS, 'choice');
+    const eligibleQuestionCount = getScopedEligibleQuestionCount({
+      filteredQuestions,
+      requestedQuestionIds: ['D1', 'D2', 'D3'],
+      shouldLimitToRequestedQuestionIds: false,
+    });
+    const practiceQuestions = selectPracticeQuestions({
+      filteredQuestions,
+      loadedQuestions: questions,
+      questionCount: getEffectivePracticeQuestionCount(5, eligibleQuestionCount),
+      restoredSession: null,
+      typeFilter: 'choice',
+    });
+
+    expect(eligibleQuestionCount).toBe(8);
+    expect(practiceQuestions).toHaveLength(5);
+  });
+
+  it('applies Today-scoped count limits when changing preset and custom counts', () => {
+    const questions = [createQuestion('T1'), createQuestion('T2'), createQuestion('T3'), createQuestion('T4')];
+    const requestedQuestionIds = ['T1', 'T2', 'T3'];
+    const filteredQuestions = filterPracticeQuestions(questions, DEFAULT_PRACTICE_FILTERS, 'choice');
+    const scopedEligibleQuestionCount = getScopedEligibleQuestionCount({
+      filteredQuestions,
+      requestedQuestionIds,
+      shouldLimitToRequestedQuestionIds: true,
+    });
+
+    const oneQuestionPractice = selectPracticeQuestions({
+      filteredQuestions,
+      loadedQuestions: questions,
+      questionCount: getEffectivePracticeQuestionCount(1, scopedEligibleQuestionCount),
+      requestedQuestionIds,
+      restoredSession: null,
+      typeFilter: 'choice',
+    });
+    const tenQuestionPractice = selectPracticeQuestions({
+      filteredQuestions,
+      loadedQuestions: questions,
+      questionCount: getEffectivePracticeQuestionCount(10, scopedEligibleQuestionCount),
+      requestedQuestionIds,
+      restoredSession: null,
+      typeFilter: 'choice',
+    });
+    const twentyFiveQuestionPractice = selectPracticeQuestions({
+      filteredQuestions,
+      loadedQuestions: questions,
+      questionCount: getEffectivePracticeQuestionCount(25, scopedEligibleQuestionCount),
+      requestedQuestionIds,
+      restoredSession: null,
+      typeFilter: 'choice',
+    });
+    const customQuestionCount = normalizeCustomQuestionCount({
+      requestedCount: 10,
+      eligibleQuestionCount: scopedEligibleQuestionCount,
+    });
+
+    expect(scopedEligibleQuestionCount).toBe(3);
+    expect(oneQuestionPractice).toHaveLength(1);
+    expect(tenQuestionPractice).toHaveLength(3);
+    expect(twentyFiveQuestionPractice).toHaveLength(3);
+    expect(customQuestionCount).toBe(3);
+    expect(twentyFiveQuestionPractice.every((question) => requestedQuestionIds.includes(question.id))).toBe(true);
+  });
+
+  it('uses the same Today question-id scope for recommendations and type changes', () => {
+    const questions = [
+      createQuestion('C1'),
+      createQuestion('C2'),
+      createQuestion('C3'),
+      createEssayQuestion('E1'),
+      createEssayQuestion('E2'),
+      createQuestion('OUTSIDE'),
+    ];
+    const requestedQuestionIds = ['C1', 'C2', 'C3', 'E1'];
+    const isRecommendationScope = isTodayQuestionIdPracticeScope({
+      fromTodayRecommendation: true,
+      questionIds: requestedQuestionIds,
+    });
+    const choiceFilteredQuestions = filterPracticeQuestions(questions, DEFAULT_PRACTICE_FILTERS, 'choice');
+    const essayFilteredQuestions = filterPracticeQuestions(questions, DEFAULT_PRACTICE_FILTERS, 'essay');
+    const choiceScopedCount = getScopedEligibleQuestionCount({
+      filteredQuestions: choiceFilteredQuestions,
+      requestedQuestionIds,
+      shouldLimitToRequestedQuestionIds: isRecommendationScope,
+    });
+    const essayScopedCount = getScopedEligibleQuestionCount({
+      filteredQuestions: essayFilteredQuestions,
+      requestedQuestionIds,
+      shouldLimitToRequestedQuestionIds: isRecommendationScope,
+    });
+    const essayPracticeQuestions = selectPracticeQuestions({
+      filteredQuestions: essayFilteredQuestions,
+      loadedQuestions: questions,
+      questionCount: getEffectivePracticeQuestionCount(5, essayScopedCount),
+      requestedQuestionIds,
+      restoredSession: null,
+      typeFilter: 'essay',
+    });
+
+    expect(isRecommendationScope).toBe(true);
+    expect(choiceScopedCount).toBe(3);
+    expect(essayScopedCount).toBe(1);
+    expect(essayPracticeQuestions).toHaveLength(1);
+    expect(essayPracticeQuestions[0]?.id).toBe('E1');
   });
 
   it('formats the settings summary with middle dots, question unit, and filters', () => {
