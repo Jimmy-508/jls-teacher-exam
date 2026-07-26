@@ -1652,11 +1652,6 @@ p {
   width: 100%;
 }
 
-.practice-search-field__icon {
-  flex: 0 0 auto;
-  color: #1c6758;
-  line-height: 1;
-}
 
 .practice-search-field__input-wrap {
   position: relative;
@@ -1704,7 +1699,14 @@ p {
 
 .practice-search-field__submit {
   flex: 0 0 auto;
+  width: 44px;
+  min-width: 44px;
+  padding-inline: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   white-space: nowrap;
+  line-height: 1;
 }
 
 .practice-search-field__result {
@@ -1722,7 +1724,9 @@ p {
 
   .practice-search-field__submit {
     flex: 0 0 auto;
+    width: 42px;
+    min-width: 42px;
     margin-left: 0;
-    padding-inline: 14px;
+    padding-inline: 0;
   }
 }

@@ -966,9 +966,6 @@ export function PracticeFilterSelector({
       </label>
       <div className="practice-search-field">
         <div className="practice-search-field__control" role="search">
-          <span className="practice-search-field__icon" aria-hidden="true">
-            {'\uD83D\uDD0D'}
-          </span>
           <label className="practice-search-field__label" htmlFor="practice-search-input">
             {'\u641c\u5c0b\u984c\u76ee'}
           </label>
@@ -994,8 +991,14 @@ export function PracticeFilterSelector({
               </button>
             ) : null}
           </div>
-          <button className="secondary-button practice-search-field__submit" type="button" onClick={onApplySearch}>
-            {'\u641c\u5c0b'}
+          <button
+            className="secondary-button practice-search-field__submit"
+            type="button"
+            aria-label={'\u641c\u5c0b\u984c\u76ee'}
+            title={'\u641c\u5c0b\u984c\u76ee'}
+            onClick={onApplySearch}
+          >
+            <span aria-hidden="true">{'\uD83D\uDD0D'}</span>
           </button>
         </div>
         {value.searchQuery ? (
