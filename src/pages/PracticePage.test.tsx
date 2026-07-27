@@ -123,7 +123,7 @@ describe('PracticePage controls', () => {
   });
 
 
-  it('renders the practice search row with label, input, clear, icon submit, and result text', () => {
+  it('renders the practice search row with label, input icon, clear button, and result text', () => {
     const searchLabel = '\u641c\u5c0b\u984c\u76ee';
     const clearLabel = '\u6e05\u9664\u641c\u5c0b';
     const placeholder = '\u8f38\u5165\u95dc\u9375\u5b57\uff0c\u53ef\u7528\u7a7a\u767d\u5206\u9694';
@@ -144,22 +144,24 @@ describe('PracticePage controls', () => {
 
     expect(html).toContain('practice-search-field');
     expect(html).not.toContain('practice-search-field__icon');
+    expect(html).not.toContain('practice-search-field__submit');
+    expect(html).not.toContain('class="secondary-button practice-search-field__submit"');
+    expect(html).toContain('practice-search-field__input-icon');
     expect(html).toContain('type="search"');
     expect(html).toContain('id="practice-search-input"');
     expect(html).toContain('for="practice-search-input"');
     expect(html).toContain('enterKeyHint="search"');
     expect(html).toContain('aria-label="' + searchLabel + '"');
-    expect(html).toContain('title="' + searchLabel + '"');
     expect(html).toContain('placeholder="' + placeholder + '"');
     expect(html).toContain('aria-label="' + clearLabel + '"');
-    expect(html).toContain('class="secondary-button practice-search-field__submit"');
-    expect(html).toContain('>' + '\uD83D\uDD0D' + '</span></button>');
+    expect(html).toContain('>' + '\uD83D\uDD0D' + '</span><input');
     expect(html).not.toContain('>' + '\u641c\u5c0b' + '</button>');
     expect(html).toContain(resultText);
     expect(html.match(new RegExp('aria-label=\"' + clearLabel + '\"', 'g'))).toHaveLength(1);
-    expect(html.match(new RegExp('aria-label=\"' + searchLabel + '\"', 'g'))).toHaveLength(2);
+    expect(html.match(new RegExp('aria-label=\"' + searchLabel + '\"', 'g'))).toHaveLength(1);
     expect(html.indexOf('practice-search-field__label')).toBeLessThan(html.indexOf('practice-search-field__input-wrap'));
-    expect(html.indexOf('practice-search-field__input-wrap')).toBeLessThan(html.indexOf('practice-search-field__submit'));
+    expect(html.indexOf('practice-search-field__input-icon')).toBeLessThan(html.indexOf('id="practice-search-input"'));
+    expect(html.indexOf('id="practice-search-input"')).toBeLessThan(html.indexOf('practice-search-field__clear'));
   });
 
   it('does not show clear button or result text before search is entered or applied', () => {
