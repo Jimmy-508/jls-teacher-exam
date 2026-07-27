@@ -93,6 +93,24 @@ describe('QuestionCard', () => {
     expect(html.match(/choice-button__image/g)).toHaveLength(4);
   });
 
+  it('renders image-only options instead of dropping them', () => {
+    const html = renderQuestionCard({}, undefined, {
+      optionA: '',
+      optionB: '',
+      optionC: '',
+      optionD: '',
+      optionAImage: '/images/a.png',
+      optionBImage: '/images/b.png',
+      optionCImage: '/images/c.png',
+      optionDImage: '/images/d.png',
+    });
+
+    expect(html.match(/choice-button__key/g)).toHaveLength(4);
+    expect(html.match(/choice-button__image/g)).toHaveLength(4);
+    expect(html).toContain('src="/images/a.png"');
+    expect(html).toContain('src="/images/d.png"');
+  });
+
   it('renders image note only when provided', () => {
     const htmlWithNote = renderQuestionCard({}, undefined, { imageNote: 'Image note text' });
     const htmlWithoutNote = renderQuestionCard({});

@@ -1,6 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../components/Modal';
-import { readQuestionBankCsvFile } from '../services/csvService';
 import {
   createJlsBackup,
   createRestorePreview,
@@ -19,7 +18,7 @@ import { buildQuestionBankTemplateCsv } from '../services/questionBankTemplateSe
 import { formatLocalDateKey } from '../services/dateService';
 import { buildQuestionIdentitySnapshots, type QuestionIdentitySnapshot } from '../services/questionBankIdentityService';
 import { reconcileLearningRecordsForQuestionBank, saveIsolatedLearningRecords } from '../services/learningRecordReconciliationService';
-import { parseAndValidateQuestionBankCsv } from '../services/questionBankValidator';
+import { readQuestionBankImportFile } from '../services/questionBankImportService';
 import { getDisplayName } from '../services/userSettingsService';
 import { saveBlobWithPicker, type SaveBlobResult } from '../services/fileSaveService';
 import {
@@ -130,7 +129,7 @@ export default function QuestionBankPage() {
   );
   const wrongQuestionDateFilterError = getWrongQuestionDateFilterError(wrongQuestionFilters);
 
-  async function handleImportCsv(file: File | undefined) {
+  async function handleImportQuestionBank(file: File | undefined) {
     if (!file) {
       return;
     }
@@ -139,8 +138,7 @@ export default function QuestionBankPage() {
     setError('');
 
     try {
-      const csvText = await readQuestionBankCsvFile(file);
-      const parsedQuestionBank = parseAndValidateQuestionBankCsv(csvText);
+      const { csvText, parsedQuestionBank, imageAssets } = await readQuestionBankImportFile(file);
       const { validation } = parsedQuestionBank;
 
       if (!validation.isValid) {
@@ -149,7 +147,7 @@ export default function QuestionBankPage() {
         return;
       }
 
-      const activeQuestionBank = await saveParsedImportedQuestionBank(csvText, parsedQuestionBank);
+      const activeQuestionBank = await saveParsedImportedQuestionBank(csvText, parsedQuestionBank, imageAssets);
       setState({
         validation: activeQuestionBank.validation,
         importedAt: activeQuestionBank.importedAt,
@@ -401,10 +399,10 @@ export default function QuestionBankPage() {
         </button>
         <input
           ref={fileInputRef}
-          accept=".csv,text/csv"
+          accept=".csv,.zip,text/csv,application/zip,application/x-zip-compressed"
           className="visually-hidden"
           type="file"
-          onChange={(event) => void handleImportCsv(event.target.files?.[0])}
+          onChange={(event) => void handleImportQuestionBank(event.target.files?.[0])}
         />
         <button
           className="library-action-button"

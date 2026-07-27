@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ProgressBar from '../components/ProgressBar';
 import QuestionCard from '../components/QuestionCard';
+import QuestionImage from '../components/QuestionImage';
 import ReferenceAnswerPanel from '../components/ReferenceAnswerPanel';
 import SmartFeedbackPanel from '../components/SmartFeedbackPanel';
 import { loadQuestions } from '../services/csvService';
@@ -1282,6 +1283,12 @@ export function EssayPracticeCard({
       </div>
 
       <h1 className="question-stem">{question.stem}</h1>
+      {typeof question.stemImage === 'string' && question.stemImage.trim().length > 0 ? (
+        <QuestionImage className="question-image question-stem-image" src={question.stemImage} alt="Question image" />
+      ) : null}
+      {typeof question.imageNote === 'string' && question.imageNote.trim().length > 0 ? (
+        <p className="question-image-note">{question.imageNote}</p>
+      ) : null}
       <p className="essay-score">配分：{question.score || 0}</p>
 
       <label className="form-field">

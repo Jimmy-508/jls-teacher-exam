@@ -1,4 +1,5 @@
 import type { ChoiceKey } from '../types/question';
+import QuestionImage from './QuestionImage';
 
 interface ChoiceButtonProps {
   choiceKey: ChoiceKey;
@@ -36,7 +37,7 @@ export default function ChoiceButton({
       <span className="choice-button__key">{choiceKey}</span>
       <span className="choice-button__body">
         <span className="choice-button__text">{text}</span>
-        {imageSrc ? <img className="question-image choice-button__image" src={imageSrc} alt={imageAlt} /> : null}
+        {imageSrc ? <QuestionImage className="question-image choice-button__image" src={imageSrc} alt={imageAlt} /> : null}
       </span>
     </button>
   );

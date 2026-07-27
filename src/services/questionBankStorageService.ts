@@ -10,6 +10,7 @@ import {
   getStoredQuestions,
   replaceStoredQuestionBank,
   type StoredQuestionBankMetadata,
+  type StoredQuestionImageAsset,
 } from './questionBankIndexedDbService';
 import { parseAndValidateQuestionBankCsv, type ParsedQuestionBank } from './questionBankValidator';
 import { load, remove } from './storageService';
@@ -51,7 +52,11 @@ export async function saveImportedQuestionBank(csvText: string): Promise<ActiveQ
   return saveParsedImportedQuestionBank(csvText, parsed);
 }
 
-export async function saveParsedImportedQuestionBank(csvText: string, parsed: ParsedQuestionBank): Promise<ActiveQuestionBank> {
+export async function saveParsedImportedQuestionBank(
+  csvText: string,
+  parsed: ParsedQuestionBank,
+  imageAssets: readonly StoredQuestionImageAsset[] = [],
+): Promise<ActiveQuestionBank> {
 
   if (!parsed.validation.isValid) {
     throw new Error(`匯入失敗。驗證結果：${parsed.validation.errors.length} 個錯誤 / ${parsed.validation.warnings.length} 個注意`);
@@ -66,7 +71,11 @@ export async function saveParsedImportedQuestionBank(csvText: string, parsed: Pa
     fingerprint: await createTextFingerprint(csvText),
   });
 
-  await replaceStoredQuestionBank(metadata, parsed.questions);
+  if (imageAssets.length > 0) {
+    await replaceStoredQuestionBank(metadata, parsed.questions, imageAssets);
+  } else {
+    await replaceStoredQuestionBank(metadata, parsed.questions);
+  }
   await remove(JLS_IMPORTED_QUESTION_BANK_STORAGE_KEY);
   dispatchQuestionBankUpdatedEvent();
 

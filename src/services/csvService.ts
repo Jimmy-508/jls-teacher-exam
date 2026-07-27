@@ -37,6 +37,41 @@ const FIELD_ALIASES: Record<string, string> = {
   id: QUESTION_BANK_FIELDS.id,
   imagenote: QUESTION_BANK_FIELDS.imageNote,
   imagecomment: QUESTION_BANK_FIELDS.imageNote,
+  '\u984c\u76ee\u5716\u7247': QUESTION_BANK_FIELDS.stemImage,
+  '\u984c\u5e79\u5716\u7247': QUESTION_BANK_FIELDS.stemImage,
+  '\u5716\u7247\u5099\u8a3b': QUESTION_BANK_FIELDS.imageNote,
+  'A\u5716\u7247': QUESTION_BANK_FIELDS.optionAImage,
+  'a\u5716\u7247': QUESTION_BANK_FIELDS.optionAImage,
+  '\uff21\u5716\u7247': QUESTION_BANK_FIELDS.optionAImage,
+  '\uff41\u5716\u7247': QUESTION_BANK_FIELDS.optionAImage,
+  '\u9078\u9805A\u5716\u7247': QUESTION_BANK_FIELDS.optionAImage,
+  '\u9078\u9805a\u5716\u7247': QUESTION_BANK_FIELDS.optionAImage,
+  '\u9078\u9805\uff21\u5716\u7247': QUESTION_BANK_FIELDS.optionAImage,
+  '\u9078\u9805\uff41\u5716\u7247': QUESTION_BANK_FIELDS.optionAImage,
+  'B\u5716\u7247': QUESTION_BANK_FIELDS.optionBImage,
+  'b\u5716\u7247': QUESTION_BANK_FIELDS.optionBImage,
+  '\uff22\u5716\u7247': QUESTION_BANK_FIELDS.optionBImage,
+  '\uff42\u5716\u7247': QUESTION_BANK_FIELDS.optionBImage,
+  '\u9078\u9805B\u5716\u7247': QUESTION_BANK_FIELDS.optionBImage,
+  '\u9078\u9805b\u5716\u7247': QUESTION_BANK_FIELDS.optionBImage,
+  '\u9078\u9805\uff22\u5716\u7247': QUESTION_BANK_FIELDS.optionBImage,
+  '\u9078\u9805\uff42\u5716\u7247': QUESTION_BANK_FIELDS.optionBImage,
+  'C\u5716\u7247': QUESTION_BANK_FIELDS.optionCImage,
+  'c\u5716\u7247': QUESTION_BANK_FIELDS.optionCImage,
+  '\uff23\u5716\u7247': QUESTION_BANK_FIELDS.optionCImage,
+  '\uff43\u5716\u7247': QUESTION_BANK_FIELDS.optionCImage,
+  '\u9078\u9805C\u5716\u7247': QUESTION_BANK_FIELDS.optionCImage,
+  '\u9078\u9805c\u5716\u7247': QUESTION_BANK_FIELDS.optionCImage,
+  '\u9078\u9805\uff23\u5716\u7247': QUESTION_BANK_FIELDS.optionCImage,
+  '\u9078\u9805\uff43\u5716\u7247': QUESTION_BANK_FIELDS.optionCImage,
+  'D\u5716\u7247': QUESTION_BANK_FIELDS.optionDImage,
+  'd\u5716\u7247': QUESTION_BANK_FIELDS.optionDImage,
+  '\uff24\u5716\u7247': QUESTION_BANK_FIELDS.optionDImage,
+  '\uff44\u5716\u7247': QUESTION_BANK_FIELDS.optionDImage,
+  '\u9078\u9805D\u5716\u7247': QUESTION_BANK_FIELDS.optionDImage,
+  '\u9078\u9805d\u5716\u7247': QUESTION_BANK_FIELDS.optionDImage,
+  '\u9078\u9805\uff24\u5716\u7247': QUESTION_BANK_FIELDS.optionDImage,
+  '\u9078\u9805\uff44\u5716\u7247': QUESTION_BANK_FIELDS.optionDImage,
   knowledge: QUESTION_BANK_FIELDS.coreConcept,
   knowledgenode: QUESTION_BANK_FIELDS.coreConcept,
   learningtheme: QUESTION_BANK_FIELDS.learningTheme,
@@ -180,7 +215,10 @@ export function parseCsv(csvText: string): CsvRow[] {
 }
 
 export async function readQuestionBankCsvFile(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
+  return decodeQuestionBankCsvBuffer(await file.arrayBuffer());
+}
+
+export function decodeQuestionBankCsvBuffer(buffer: ArrayBuffer): string {
   const utf8Text = decodeCsvBuffer(buffer, 'utf-8');
 
   if (hasReadableQuestionBankHeader(utf8Text)) {
