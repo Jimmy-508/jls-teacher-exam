@@ -17,6 +17,12 @@ export interface Question {
   optionB?: string;
   optionC?: string;
   optionD?: string;
+  stemImage?: string;
+  optionAImage?: string;
+  optionBImage?: string;
+  optionCImage?: string;
+  optionDImage?: string;
+  imageNote?: string;
   correctAnswer: string;
   myAnswer?: string;
   isCorrect?: string;

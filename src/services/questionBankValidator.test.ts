@@ -10,12 +10,29 @@ import {
 import { validateQuestionBankCsv } from './questionBankValidator';
 
 const header = QUESTION_BANK_TEMPLATE_HEADERS.join(',');
-const latestSchema =
-  'ID,年度,類科,科目,題號,題型,分數,類別,核心概念,題幹,A,B,C,D,標準答案,我的答案,是否答對,題幹分析,A解析,B解析,C解析,D解析,非選參考答案,解題技巧,易混淆概念,熟悉度,錯誤次數,已抽過,最後複習,下次複習,來源頁,備註,捷徑關鍵字,核心概念同義詞,加分概念';
+const IMAGE_QUESTION_BANK_HEADERS = [
+  QUESTION_BANK_FIELDS.stemImage,
+  QUESTION_BANK_FIELDS.optionAImage,
+  QUESTION_BANK_FIELDS.optionBImage,
+  QUESTION_BANK_FIELDS.optionCImage,
+  QUESTION_BANK_FIELDS.optionDImage,
+  QUESTION_BANK_FIELDS.imageNote,
+] as const;
+
+const legacy35Header = QUESTION_BANK_TEMPLATE_HEADERS.filter(
+  (headerName) => !IMAGE_QUESTION_BANK_HEADERS.includes(headerName as (typeof IMAGE_QUESTION_BANK_HEADERS)[number]),
+).join(',');
 
 describe('questionBankValidator', () => {
-  it('exports the latest 33-column CSV template order', () => {
-    expect(header).toBe(latestSchema);
+  it('exports the latest 41-column CSV template order with optional image headers', () => {
+    expect(QUESTION_BANK_TEMPLATE_HEADERS).toHaveLength(41);
+    expect(QUESTION_BANK_TEMPLATE_HEADERS).toEqual(expect.arrayContaining([...IMAGE_QUESTION_BANK_HEADERS]));
+    expect(QUESTION_BANK_TEMPLATE_HEADERS.indexOf(QUESTION_BANK_FIELDS.stemImage)).toBeGreaterThan(
+      QUESTION_BANK_TEMPLATE_HEADERS.indexOf(QUESTION_BANK_FIELDS.optionD),
+    );
+    expect(QUESTION_BANK_TEMPLATE_HEADERS.indexOf(QUESTION_BANK_FIELDS.imageNote)).toBeLessThan(
+      QUESTION_BANK_TEMPLATE_HEADERS.indexOf(QUESTION_BANK_FIELDS.correctAnswer),
+    );
   });
 
   it('allows the exported template to be re-imported', () => {
@@ -68,6 +85,55 @@ describe('questionBankValidator', () => {
     ]);
   });
 
+  it('parses legacy 35-column CSV without image fields', () => {
+    const csv = [legacy35Header, legacyChoiceRow({})].join('\n');
+    const validation = validateQuestionBankCsv(csv);
+    const [question] = parseCsv(csv).map(toQuestion);
+
+    expect(validation.isValid).toBe(true);
+    expect(validation.errors).toHaveLength(0);
+    expect(question.id).toBe('Q001');
+    expect(question.stemImage).toBeUndefined();
+    expect(question.optionAImage).toBeUndefined();
+    expect(question.optionBImage).toBeUndefined();
+    expect(question.optionCImage).toBeUndefined();
+    expect(question.optionDImage).toBeUndefined();
+    expect(question.imageNote).toBeUndefined();
+  });
+
+  it('parses new 41-column CSV image fields as optional Question properties', () => {
+    const [question] = parseCsv([header, validChoiceRow({
+      [QUESTION_BANK_FIELDS.stemImage]: 'images/stem.png',
+      [QUESTION_BANK_FIELDS.optionAImage]: 'images/a.png',
+      [QUESTION_BANK_FIELDS.optionBImage]: 'images/b.png',
+      [QUESTION_BANK_FIELDS.optionCImage]: 'images/c.png',
+      [QUESTION_BANK_FIELDS.optionDImage]: 'images/d.png',
+      [QUESTION_BANK_FIELDS.imageNote]: 'image note',
+    })].join('\n')).map(toQuestion);
+
+    expect(question.stemImage).toBe('images/stem.png');
+    expect(question.optionAImage).toBe('images/a.png');
+    expect(question.optionBImage).toBe('images/b.png');
+    expect(question.optionCImage).toBe('images/c.png');
+    expect(question.optionDImage).toBe('images/d.png');
+    expect(question.imageNote).toBe('image note');
+  });
+
+  it('accepts blank image fields without validation errors', () => {
+    const csv = [header, validChoiceRow({})].join('\n');
+    const validation = validateQuestionBankCsv(csv);
+    const [question] = parseCsv(csv).map(toQuestion);
+
+    expect(validation.isValid).toBe(true);
+    expect(validation.errors).toHaveLength(0);
+    expect(question.stemImage).toBeUndefined();
+    expect(question.optionAImage).toBeUndefined();
+    expect(question.optionBImage).toBeUndefined();
+    expect(question.optionCImage).toBeUndefined();
+    expect(question.optionDImage).toBeUndefined();
+    expect(question.imageNote).toBeUndefined();
+  });
+
   it('imports offline explanation fields by header name', () => {
     const [question] = parseCsv([header, validChoiceRow({})].join('\n')).map(toQuestion);
 
@@ -111,7 +177,15 @@ describe('questionBankValidator', () => {
 });
 
 function validChoiceRow(overrides: Record<string, string>): string {
-  return makeRow({
+  return makeRow(validChoiceValues(overrides));
+}
+
+function legacyChoiceRow(overrides: Record<string, string>): string {
+  return makeRowWithHeaders(legacy35Header.split(','), validChoiceValues(overrides));
+}
+
+function validChoiceValues(overrides: Record<string, string>): Record<string, string> {
+  return {
     [QUESTION_BANK_FIELDS.id]: 'Q001',
     [QUESTION_BANK_FIELDS.year]: '113',
     [QUESTION_BANK_FIELDS.category]: '教檢',
@@ -135,7 +209,7 @@ function validChoiceRow(overrides: Record<string, string>): string {
     [QUESTION_BANK_FIELDS.solvingTip]: '先抓題幹關鍵詞。',
     [QUESTION_BANK_FIELDS.commonMistake]: '容易混淆法源位階。',
     ...overrides,
-  });
+  };
 }
 
 function validEssayRow(overrides: Record<string, string>): string {
@@ -159,7 +233,11 @@ function validEssayRow(overrides: Record<string, string>): string {
 }
 
 function makeRow(values: Record<string, string>): string {
-  return QUESTION_BANK_TEMPLATE_HEADERS.map((headerName) => csvEscape(values[headerName] ?? '')).join(',');
+  return makeRowWithHeaders(QUESTION_BANK_TEMPLATE_HEADERS, values);
+}
+
+function makeRowWithHeaders(headers: readonly string[], values: Record<string, string>): string {
+  return headers.map((headerName) => csvEscape(values[headerName] ?? '')).join(',');
 }
 
 function csvEscape(value: string): string {

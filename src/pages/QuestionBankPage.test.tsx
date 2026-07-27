@@ -1,6 +1,6 @@
 ﻿import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { QUESTION_BANK_TEMPLATE_HEADERS } from '../services/questionBankFields';
+import { QUESTION_BANK_FIELDS, QUESTION_BANK_TEMPLATE_HEADERS } from '../services/questionBankFields';
 import { buildQuestionBankTemplateCsv, createCsvRow, escapeCsvValue } from '../services/questionBankTemplateService';
 import { parseCsv } from '../services/csvService';
 import { validateQuestionBankCsv } from '../services/questionBankValidator';
@@ -41,14 +41,24 @@ describe('QuestionBankPage', () => {
     expect(validation.errors).toHaveLength(0);
   });
 
-  it('exports a useful CSV template with BOM, 35 headers, and five example rows', () => {
+  it('exports a useful CSV template with BOM, 41 headers, and five example rows', () => {
     const csv = buildQuestionBankTemplateCsv();
     const lines = csv.replace(/^\uFEFF/, '').trim().split(/\r\n/);
     const rows = parseCsv(csv);
 
     expect(csv.startsWith('\uFEFF')).toBe(true);
     expect(lines[0].split(',')).toEqual([...QUESTION_BANK_TEMPLATE_HEADERS]);
-    expect(QUESTION_BANK_TEMPLATE_HEADERS).toHaveLength(35);
+    expect(QUESTION_BANK_TEMPLATE_HEADERS).toHaveLength(41);
+    expect(QUESTION_BANK_TEMPLATE_HEADERS).toEqual(
+      expect.arrayContaining([
+        QUESTION_BANK_FIELDS.stemImage,
+        QUESTION_BANK_FIELDS.optionAImage,
+        QUESTION_BANK_FIELDS.optionBImage,
+        QUESTION_BANK_FIELDS.optionCImage,
+        QUESTION_BANK_FIELDS.optionDImage,
+        QUESTION_BANK_FIELDS.imageNote,
+      ]),
+    );
     expect(lines).toHaveLength(6);
     expect(rows).toHaveLength(5);
     expect(csv).toContain('TEMPLATE-C-001');
