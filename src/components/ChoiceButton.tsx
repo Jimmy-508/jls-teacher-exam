@@ -3,6 +3,8 @@ import type { ChoiceKey } from '../types/question';
 interface ChoiceButtonProps {
   choiceKey: ChoiceKey;
   text: string;
+  imageSrc?: string;
+  imageAlt: string;
   disabled: boolean;
   isSelected: boolean;
   isCorrectAnswer: boolean;
@@ -13,6 +15,8 @@ interface ChoiceButtonProps {
 export default function ChoiceButton({
   choiceKey,
   text,
+  imageSrc,
+  imageAlt,
   disabled,
   isSelected,
   isCorrectAnswer,
@@ -30,7 +34,10 @@ export default function ChoiceButton({
   return (
     <button className={stateClass} type="button" disabled={disabled} onClick={() => onSelect(choiceKey)}>
       <span className="choice-button__key">{choiceKey}</span>
-      <span className="choice-button__text">{text}</span>
+      <span className="choice-button__body">
+        <span className="choice-button__text">{text}</span>
+        {imageSrc ? <img className="question-image choice-button__image" src={imageSrc} alt={imageAlt} /> : null}
+      </span>
     </button>
   );
 }
