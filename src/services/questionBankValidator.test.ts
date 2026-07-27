@@ -26,13 +26,9 @@ const legacy35Header = QUESTION_BANK_TEMPLATE_HEADERS.filter(
 describe('questionBankValidator', () => {
   it('exports the latest 41-column CSV template order with optional image headers', () => {
     expect(QUESTION_BANK_TEMPLATE_HEADERS).toHaveLength(41);
-    expect(QUESTION_BANK_TEMPLATE_HEADERS).toEqual(expect.arrayContaining([...IMAGE_QUESTION_BANK_HEADERS]));
-    expect(QUESTION_BANK_TEMPLATE_HEADERS.indexOf(QUESTION_BANK_FIELDS.stemImage)).toBeGreaterThan(
-      QUESTION_BANK_TEMPLATE_HEADERS.indexOf(QUESTION_BANK_FIELDS.optionD),
-    );
-    expect(QUESTION_BANK_TEMPLATE_HEADERS.indexOf(QUESTION_BANK_FIELDS.imageNote)).toBeLessThan(
-      QUESTION_BANK_TEMPLATE_HEADERS.indexOf(QUESTION_BANK_FIELDS.correctAnswer),
-    );
+    expect(QUESTION_BANK_TEMPLATE_HEADERS[14]).toBe(QUESTION_BANK_FIELDS.correctAnswer);
+    expect(QUESTION_BANK_TEMPLATE_HEADERS[34]).toBe(QUESTION_BANK_FIELDS.bonusConcepts);
+    expect(QUESTION_BANK_TEMPLATE_HEADERS.slice(35)).toEqual([...IMAGE_QUESTION_BANK_HEADERS]);
   });
 
   it('allows the exported template to be re-imported', () => {

@@ -49,18 +49,26 @@ describe('QuestionBankPage', () => {
     expect(csv.startsWith('\uFEFF')).toBe(true);
     expect(lines[0].split(',')).toEqual([...QUESTION_BANK_TEMPLATE_HEADERS]);
     expect(QUESTION_BANK_TEMPLATE_HEADERS).toHaveLength(41);
-    expect(QUESTION_BANK_TEMPLATE_HEADERS).toEqual(
-      expect.arrayContaining([
-        QUESTION_BANK_FIELDS.stemImage,
-        QUESTION_BANK_FIELDS.optionAImage,
-        QUESTION_BANK_FIELDS.optionBImage,
-        QUESTION_BANK_FIELDS.optionCImage,
-        QUESTION_BANK_FIELDS.optionDImage,
-        QUESTION_BANK_FIELDS.imageNote,
-      ]),
-    );
+    expect(QUESTION_BANK_TEMPLATE_HEADERS[14]).toBe(QUESTION_BANK_FIELDS.correctAnswer);
+    expect(QUESTION_BANK_TEMPLATE_HEADERS[34]).toBe(QUESTION_BANK_FIELDS.bonusConcepts);
+    expect(QUESTION_BANK_TEMPLATE_HEADERS.slice(35)).toEqual([
+      QUESTION_BANK_FIELDS.stemImage,
+      QUESTION_BANK_FIELDS.optionAImage,
+      QUESTION_BANK_FIELDS.optionBImage,
+      QUESTION_BANK_FIELDS.optionCImage,
+      QUESTION_BANK_FIELDS.optionDImage,
+      QUESTION_BANK_FIELDS.imageNote,
+    ]);
     expect(lines).toHaveLength(6);
     expect(rows).toHaveLength(5);
+    for (const row of rows) {
+      expect(row[QUESTION_BANK_FIELDS.stemImage]).toBe('');
+      expect(row[QUESTION_BANK_FIELDS.optionAImage]).toBe('');
+      expect(row[QUESTION_BANK_FIELDS.optionBImage]).toBe('');
+      expect(row[QUESTION_BANK_FIELDS.optionCImage]).toBe('');
+      expect(row[QUESTION_BANK_FIELDS.optionDImage]).toBe('');
+      expect(row[QUESTION_BANK_FIELDS.imageNote]).toBe('');
+    }
     expect(csv).toContain('TEMPLATE-C-001');
     expect(csv).toContain('TEMPLATE-C-002');
     expect(csv).toContain('TEMPLATE-C-003');
@@ -84,6 +92,7 @@ describe('QuestionBankPage', () => {
     const createElement = vi.fn(() => ({
       click,
       remove,
+      style: {},
       set download(value: string) {
         expect(value).toBe('JLS_question_template.csv');
       },
@@ -118,10 +127,11 @@ describe('QuestionBankPage', () => {
 
   it('builds the CSV template blob with the expected CSV MIME type and BOM content', async () => {
     const blob = buildCsvTemplateBlob();
+    const bytes = new Uint8Array(await blob.arrayBuffer());
     const text = await blob.text();
 
     expect(blob.type).toBe('text/csv;charset=utf-8');
-    expect(text.startsWith('\uFEFF')).toBe(true);
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
     expect(text).toContain('TEMPLATE-C-001');
   });
 

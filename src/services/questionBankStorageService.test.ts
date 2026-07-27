@@ -146,7 +146,7 @@ describe('questionBankStorageService', () => {
 
     expect(activeQuestionBank.source).toBe('default');
     expect(activeQuestionBank.questions[0].id).toBe('NEW_DEFAULT');
-    expect(activeQuestionBank.metadata.defaultBankVersion).toBe('4.3.0');
+    expect(activeQuestionBank.metadata.defaultBankVersion).toBe('5.0.0');
   });
 
   it('does not replace a user imported question bank when the app version changes', async () => {

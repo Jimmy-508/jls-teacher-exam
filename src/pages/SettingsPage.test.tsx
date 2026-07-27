@@ -27,7 +27,7 @@ describe('SettingsPage', () => {
     expect(html).toContain('<details class="today-card about-jls-card">');
     expect(html).not.toContain('<details open');
     expect(html).toContain('Jarvis 教師資格考學習系統');
-    expect(html).toContain('v4.3');
+    expect(html).toContain('v5.0');
     expect(html).toContain('離線資源更新');
     expect(html).toContain('檢查更新');
     expect(html).not.toContain('OpenAI API Key');
