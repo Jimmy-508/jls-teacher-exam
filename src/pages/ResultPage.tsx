@@ -66,10 +66,13 @@ export default function ResultPage() {
   const gradableCount = result.gradableCount ?? result.totalCount;
   const accuracy = gradableCount > 0 ? `${calculateAccuracy(result.correctCount, gradableCount)}%` : '無可評分題目';
   const isEssayResult = result.questionType === ESSAY_QUESTION_TYPE;
+  const isUngradableChoiceResult = !isEssayResult && gradableCount === 0;
+  const notCountedDisplay = '不列入計算';
   const averageStars =
     typeof result.averageFeedbackLevel === 'number' ? toStars(result.averageFeedbackLevel) : '尚未評估';
-  const correctCountDisplay = isEssayResult ? '不列入計算' : result.correctCount;
-  const wrongCountDisplay = isEssayResult ? '不列入計算' : wrongCount;
+  const correctCountDisplay = isEssayResult || isUngradableChoiceResult ? notCountedDisplay : result.correctCount;
+  const wrongCountDisplay = isEssayResult || isUngradableChoiceResult ? notCountedDisplay : wrongCount;
+  const accuracyDisplay = isUngradableChoiceResult ? notCountedDisplay : accuracy;
 
   return (
     <section className="result-page">
@@ -85,7 +88,7 @@ export default function ResultPage() {
         </div>
         <div>
           <span>{isEssayResult ? '核心概念' : '正確率'}</span>
-          <strong>{isEssayResult ? averageStars : accuracy}</strong>
+          <strong>{isEssayResult ? averageStars : accuracyDisplay}</strong>
         </div>
       </div>
       <Link className="primary-button primary-button--wide" to="/">
