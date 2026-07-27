@@ -27,6 +27,11 @@ export interface ParsedQuestionBankImportFile {
   csvText: string;
   parsedQuestionBank: ParsedQuestionBank;
   imageAssets: StoredQuestionImageAsset[];
+  imageWarnings?: string[];
+}
+
+export interface QuestionBankZipReadOptions {
+  allowMissingImages?: boolean;
 }
 
 const CSV_EXTENSION = '.csv';
@@ -39,7 +44,7 @@ const IMAGE_EXTENSION_MIME_TYPES = new Map([
 
 export async function readQuestionBankImportFile(file: File): Promise<ParsedQuestionBankImportFile> {
   if (isZipFile(file)) {
-    return readQuestionBankZipFile(file);
+    return readQuestionBankZipBlob(file);
   }
 
   const csvText = await readQuestionBankCsvFile(file);
@@ -50,8 +55,11 @@ export async function readQuestionBankImportFile(file: File): Promise<ParsedQues
   };
 }
 
-async function readQuestionBankZipFile(file: File): Promise<ParsedQuestionBankImportFile> {
-  const entries = await readZipEntries(await file.arrayBuffer());
+export async function readQuestionBankZipBlob(
+  blob: Blob,
+  options: QuestionBankZipReadOptions = {},
+): Promise<ParsedQuestionBankImportFile> {
+  const entries = await readZipEntries(await blob.arrayBuffer());
   const fileEntries = entries.filter((entry) => !entry.isDirectory);
   const csvEntries = fileEntries.filter((entry) => normalizeZipPath(entry.name)?.toLowerCase().endsWith(CSV_EXTENSION));
 
@@ -71,7 +79,7 @@ async function readQuestionBankZipFile(file: File): Promise<ParsedQuestionBankIm
   }
 
   const imageEntries = buildImageEntryIndex(fileEntries);
-  const resolved = resolveQuestionImageReferences(parsedQuestionBank.questions, imageEntries);
+  const resolved = resolveQuestionImageReferences(parsedQuestionBank.questions, imageEntries, options);
 
   return {
     csvText,
@@ -80,6 +88,7 @@ async function readQuestionBankZipFile(file: File): Promise<ParsedQuestionBankIm
       questions: resolved.questions,
     },
     imageAssets: resolved.imageAssets,
+    imageWarnings: resolved.imageWarnings,
   };
 }
 
@@ -112,8 +121,10 @@ function buildImageEntryIndex(entries: readonly ZipEntryData[]) {
 function resolveQuestionImageReferences(
   questions: readonly Question[],
   imageEntries: ReturnType<typeof buildImageEntryIndex>,
-): { questions: Question[]; imageAssets: StoredQuestionImageAsset[] } {
+  options: QuestionBankZipReadOptions,
+): { questions: Question[]; imageAssets: StoredQuestionImageAsset[]; imageWarnings: string[] } {
   const usedAssets = new Map<string, StoredQuestionImageAsset>();
+  const imageWarnings: string[] = [];
   const updatedAt = new Date().toISOString();
   const questionsWithImages = questions.map((question) => {
     let changed = false;
@@ -136,7 +147,24 @@ function resolveQuestionImageReferences(
         return;
       }
 
-      const entry = findReferencedImageEntry(value, field, question.id, imageEntries);
+      let entry: ZipEntryData;
+
+      try {
+        entry = findReferencedImageEntry(value, field, question.id, imageEntries);
+      } catch (error) {
+        if (!options.allowMissingImages) {
+          throw error;
+        }
+
+        const message = error instanceof Error
+          ? error.message
+          : 'ZIP import failed: missing image "' + value + '" in ' + field + ' for question ' + question.id + '.';
+        imageWarnings.push(message);
+        nextQuestion[field] = undefined;
+        changed = true;
+        return;
+      }
+
       const assetId = createAssetId(entry.name);
       nextQuestion[field] = createQuestionImageAssetReference(assetId);
       changed = true;
@@ -158,6 +186,7 @@ function resolveQuestionImageReferences(
   return {
     questions: questionsWithImages,
     imageAssets: [...usedAssets.values()],
+    imageWarnings,
   };
 }
 

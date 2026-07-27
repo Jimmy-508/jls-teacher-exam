@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { readQuestionBankImportFile } from './questionBankImportService';
-import { isQuestionImageAssetReference } from './questionImageAssetService';
+import { readQuestionBankImportFile, readQuestionBankZipBlob } from './questionBankImportService';
+import { getQuestionImageAssetId, isQuestionImageAssetReference } from './questionImageAssetService';
 
 const oldCsv = [
   'id,year,category,subject,questionNumber,type,score,learningTheme,coreConcept,stem,optionA,optionB,optionC,optionD,correctAnswer',
@@ -132,6 +132,51 @@ describe('questionBankImportService', () => {
     expect(result.parsedQuestionBank.questions[0].stemImage).toContain(encodeURIComponent('images/\u570B.png'));
   });
 
+
+  it('reads the actual built-in v5.0 ZIP and preserves option image assets for 110 Chinese question 32', async () => {
+    // @ts-expect-error Vitest runs this integration check in Node, but this project does not include Node types.
+    const { readFileSync } = await import('node:fs');
+    const zipBytes = readFileSync('JLS_094_115_v5.0.zip');
+    const result = await readQuestionBankImportFile(
+      new File([toArrayBuffer(new Uint8Array(zipBytes))], 'JLS_094_115_v5.0.zip', { type: 'application/zip' }),
+    );
+
+    expect(result.parsedQuestionBank.validation.isValid).toBe(true);
+    expect(result.parsedQuestionBank.questions.length).toBeGreaterThan(1000);
+    expect(result.imageAssets.length).toBeGreaterThan(0);
+
+    const question = result.parsedQuestionBank.questions.find(
+      (candidate) =>
+        candidate.year === '110' &&
+        candidate.subject.includes('\u570b\u8a9e\u6587') &&
+        candidate.questionNumber === '32',
+    );
+
+    expect(question).toBeDefined();
+    if (!question) {
+      throw new Error('Expected 110 ??????? question 32 in the built-in ZIP.');
+    }
+
+    const imageReferences = [
+      question.stemImage,
+      question.optionAImage,
+      question.optionBImage,
+      question.optionCImage,
+      question.optionDImage,
+    ];
+
+    imageReferences.forEach((reference) => {
+      expect(isQuestionImageAssetReference(reference)).toBe(true);
+      expect(reference).not.toContain('blob:');
+      expect(reference).not.toContain('data:');
+    });
+
+    const assetIds = new Set(result.imageAssets.map((asset) => asset.id));
+    imageReferences.forEach((reference) => {
+      expect(assetIds.has(getQuestionImageAssetId(reference ?? ''))).toBe(true);
+    });
+  });
+
   it('fails when a ZIP has no CSV file', async () => {
     const zip = createStoredZip({ 'image.png': 'image' });
 
@@ -154,6 +199,21 @@ describe('questionBankImportService', () => {
     await expect(readQuestionBankImportFile(new File([toArrayBuffer(zip)], 'questions.zip', { type: 'application/zip' }))).rejects.toThrow(
       /missing image/i,
     );
+  });
+
+  it('allows missing images only when reading the built-in default ZIP in tolerant mode', async () => {
+    const zip = createStoredZip({ 'questions.csv': imageCsv, 'images/a.png': 'a image' });
+
+    const result = await readQuestionBankZipBlob(new Blob([toArrayBuffer(zip)], { type: 'application/zip' }), {
+      allowMissingImages: true,
+    });
+
+    expect(result.parsedQuestionBank.validation.isValid).toBe(true);
+    expect(result.parsedQuestionBank.questions).toHaveLength(1);
+    expect(result.parsedQuestionBank.questions[0].stemImage).toBeUndefined();
+    expect(isQuestionImageAssetReference(result.parsedQuestionBank.questions[0].optionAImage)).toBe(true);
+    expect(result.imageAssets).toHaveLength(1);
+    expect(result.imageWarnings?.length).toBeGreaterThan(0);
   });
 
   it('rejects unsafe image paths', async () => {

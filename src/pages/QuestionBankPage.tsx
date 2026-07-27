@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+﻿﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../components/Modal';
 import {
   createJlsBackup,
@@ -389,7 +389,6 @@ export default function QuestionBankPage() {
     <section className="question-bank-page">
       <header className="page-header">
         <h1>Library</h1>
-        <p>學習資源管理</p>
       </header>
 
       <section className="library-actions" aria-label="Library actions">
@@ -425,7 +424,7 @@ export default function QuestionBankPage() {
         <p>
           {state.source === 'imported' && state.importedAt
             ? '匯入時間：' + formatDateTime(state.importedAt)
-            : '目前使用 public/questions.csv。'}
+            : '目前使用內建 JLS_094_115_v5.0.zip。'}
         </p>
         {state.source === 'imported' ? (
           <button className="secondary-button" type="button" onClick={handleResetQuestionBank}>

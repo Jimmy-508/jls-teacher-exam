@@ -59,7 +59,6 @@ export default function SettingsPage() {
     <section className="settings-page">
       <header className="page-header">
         <h1>Settings</h1>
-        <p>個人設定</p>
       </header>
 
       <section className="today-card">

@@ -12,11 +12,13 @@ import {
   type StoredQuestionBankMetadata,
   type StoredQuestionImageAsset,
 } from './questionBankIndexedDbService';
+import { readQuestionBankZipBlob } from './questionBankImportService';
 import { parseAndValidateQuestionBankCsv, type ParsedQuestionBank } from './questionBankValidator';
 import { load, remove } from './storageService';
 import { JLS_IMPORTED_QUESTION_BANK_STORAGE_KEY } from './storageKeys';
 
-const DEFAULT_QUESTION_BANK_PATH = `${import.meta.env.BASE_URL}questions.csv`;
+export const DEFAULT_QUESTION_BANK_FILE_NAME = 'JLS_094_115_v5.0.zip';
+export const DEFAULT_QUESTION_BANK_PATH = `${import.meta.env.BASE_URL}${DEFAULT_QUESTION_BANK_FILE_NAME}`;
 const DEFAULT_QUESTION_BANK_VERSION = APP_PACKAGE_VERSION;
 
 export interface ImportedQuestionBank {
@@ -165,14 +167,20 @@ async function writeDefaultQuestionBank(): Promise<ActiveQuestionBank> {
   const response = await fetch(DEFAULT_QUESTION_BANK_PATH);
 
   if (!response.ok) {
-    throw new Error('無法讀取 public/questions.csv。');
+    throw new Error('內建題庫載入失敗，請確認 JLS_094_115_v5.0.zip 是否存在。');
   }
 
-  const csvText = await response.text();
-  const parsed = parseAndValidateQuestionBankCsv(csvText);
+  const { csvText, parsedQuestionBank: parsed, imageAssets, imageWarnings = [] } = await readQuestionBankZipBlob(
+    await response.blob(),
+    { allowMissingImages: true },
+  );
+
+  if (imageWarnings.length > 0 && import.meta.env.DEV) {
+    console.warn('[JLS default question bank images]', imageWarnings);
+  }
 
   if (!parsed.validation.isValid) {
-    throw new Error('預設題庫驗證失敗，請確認 public/questions.csv。');
+    throw new Error('內建題庫驗證失敗，請確認 JLS_094_115_v5.0.zip 內的 CSV。');
   }
 
   const metadata = buildMetadata({
@@ -183,7 +191,7 @@ async function writeDefaultQuestionBank(): Promise<ActiveQuestionBank> {
     defaultBankVersion: DEFAULT_QUESTION_BANK_VERSION,
   });
 
-  await replaceStoredQuestionBank(metadata, parsed.questions);
+  await replaceStoredQuestionBank(metadata, parsed.questions, imageAssets);
   return toActiveQuestionBank(metadata, parsed.questions);
 }
 
