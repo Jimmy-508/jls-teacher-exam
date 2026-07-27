@@ -3,6 +3,7 @@ import { getLearningThemeDisplayName } from '../services/displayDictionary';
 import type { ChoiceExplanation } from '../types/ChoiceExplanation';
 import type { ChoiceKey, PracticeAnswer, Question } from '../types/question';
 import ChoiceButton from './ChoiceButton';
+import QuestionImage from './QuestionImage';
 import ExplanationPanel from './ExplanationPanel';
 
 interface QuestionCardProps {
@@ -18,12 +19,20 @@ interface QuestionCardProps {
   answerHeadline?: ReactNode;
 }
 
-const choices: Array<{ key: ChoiceKey; optionField: 'optionA' | 'optionB' | 'optionC' | 'optionD' }> = [
-  { key: 'A', optionField: 'optionA' },
-  { key: 'B', optionField: 'optionB' },
-  { key: 'C', optionField: 'optionC' },
-  { key: 'D', optionField: 'optionD' },
+const choices: Array<{
+  key: ChoiceKey;
+  optionField: 'optionA' | 'optionB' | 'optionC' | 'optionD';
+  imageField: 'optionAImage' | 'optionBImage' | 'optionCImage' | 'optionDImage';
+}> = [
+  { key: 'A', optionField: 'optionA', imageField: 'optionAImage' },
+  { key: 'B', optionField: 'optionB', imageField: 'optionBImage' },
+  { key: 'C', optionField: 'optionC', imageField: 'optionCImage' },
+  { key: 'D', optionField: 'optionD', imageField: 'optionDImage' },
 ];
+
+function hasImageValue(value: string | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
 
 export default function QuestionCard({
   question,
@@ -48,6 +57,8 @@ export default function QuestionCard({
     answer?.isGradable === false
       ? '本題未提供標準答案，本次作答不列入錯題紀錄。'
       : answerHeadline ?? (answer?.isCorrect ? '答案正確！' : `答案錯誤，正確答案是 ${answer?.correctAnswer}。`);
+  const stemImageSrc = hasImageValue(question.stemImage) ? question.stemImage : undefined;
+  const hasImageNote = hasImageValue(question.imageNote);
 
   return (
     <section className="question-card">
@@ -60,12 +71,17 @@ export default function QuestionCard({
       </div>
 
       <h1 className="question-stem">{question.stem}</h1>
+      {stemImageSrc ? (
+        <QuestionImage className="question-image question-stem-image" src={stemImageSrc} alt="Question image" />
+      ) : null}
 
       <div className="choice-list">
-        {choices.map(({ key, optionField }) => {
-          const text = question[optionField];
+        {choices.map(({ key, optionField, imageField }) => {
+          const text = question[optionField] ?? '';
+          const imageSrc = question[imageField];
+          const normalizedImageSrc = hasImageValue(imageSrc) ? imageSrc : undefined;
 
-          if (!text) {
+          if (!text && !normalizedImageSrc) {
             return null;
           }
 
@@ -74,6 +90,8 @@ export default function QuestionCard({
               key={key}
               choiceKey={key}
               text={text}
+              imageSrc={normalizedImageSrc}
+              imageAlt={key + ' option image'}
               disabled={hasAnswered || isAnswerSaving}
               isSelected={answer?.selectedAnswer === key}
               isCorrectAnswer={answer?.correctAnswer === key}
@@ -83,6 +101,8 @@ export default function QuestionCard({
           );
         })}
       </div>
+
+      {hasImageNote ? <p className="question-image-note">{question.imageNote}</p> : null}
 
       {answer ? (
         <div className={answerPanelClassName}>

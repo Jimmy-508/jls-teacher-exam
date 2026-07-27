@@ -50,6 +50,42 @@ describe('ResultPage', () => {
     expect(html).not.toContain('核心概念');
   });
 
+  it('shows not counted for every stat when choice results have no gradable questions', () => {
+    locationState.value = {
+      totalCount: 3,
+      correctCount: 0,
+      wrongCount: 0,
+      gradableCount: 0,
+      questionType: CHOICE_QUESTION_TYPE,
+    };
+
+    const html = renderToStaticMarkup(<ResultPage />);
+    const notCounted = '\u4e0d\u5217\u5165\u8a08\u7b97';
+
+    expect(getStatCardText(html, '\u7b54\u5c0d\u984c\u6578')).toContain(notCounted);
+    expect(getStatCardText(html, '\u7b54\u932f\u984c\u6578')).toContain(notCounted);
+    expect(getStatCardText(html, '\u6b63\u78ba\u7387')).toContain(notCounted);
+    expect(html.match(new RegExp(notCounted, 'g'))).toHaveLength(3);
+    expect(html).not.toContain('\u7121\u53ef\u8a55\u5206\u984c\u76ee');
+  });
+
+  it('keeps numeric choice result display when at least one question is gradable', () => {
+    locationState.value = {
+      totalCount: 3,
+      correctCount: 1,
+      wrongCount: 0,
+      gradableCount: 1,
+      questionType: CHOICE_QUESTION_TYPE,
+    };
+
+    const html = renderToStaticMarkup(<ResultPage />);
+
+    expect(getStatCardText(html, '\u7b54\u5c0d\u984c\u6578')).toContain('1');
+    expect(getStatCardText(html, '\u7b54\u932f\u984c\u6578')).toContain('0');
+    expect(getStatCardText(html, '\u6b63\u78ba\u7387')).toContain('100%');
+    expect(html).not.toContain('\u4e0d\u5217\u5165\u8a08\u7b97');
+  });
+
   it('shows essay practice correct and wrong counts as not counted', () => {
     locationState.value = {
       totalCount: 2,

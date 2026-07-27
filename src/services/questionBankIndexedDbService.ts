@@ -2,9 +2,10 @@ import type { Question } from '../types/question';
 import type { QuestionBankValidationResult } from '../types/QuestionBankValidation';
 
 export const QUESTION_BANK_DB_NAME = 'JLSQuestionBankDB';
-export const QUESTION_BANK_DB_VERSION = 1;
+export const QUESTION_BANK_DB_VERSION = 2;
 export const QUESTION_BANK_METADATA_STORE = 'questionBankMetadata';
 export const QUESTION_BANK_QUESTIONS_STORE = 'questions';
+export const QUESTION_BANK_IMAGE_ASSETS_STORE = 'questionImageAssets';
 export const ACTIVE_QUESTION_BANK_METADATA_ID = 'active';
 export const QUESTION_BANK_SCHEMA_VERSION = 1;
 
@@ -19,6 +20,14 @@ export interface StoredQuestionBankMetadata {
   summary: QuestionBankValidationResult['summary'];
   fingerprint?: string;
   defaultBankVersion?: string;
+}
+
+export interface StoredQuestionImageAsset {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  blob: Blob;
+  updatedAt: string;
 }
 
 export interface StoredQuestionBank {
@@ -63,6 +72,22 @@ export async function getStoredQuestions(): Promise<Question[]> {
   }
 }
 
+export async function getStoredQuestionImageAsset(id: string): Promise<StoredQuestionImageAsset | null> {
+  const db = await openQuestionBankDb();
+
+  try {
+    return requestToPromise<StoredQuestionImageAsset | undefined>(
+      db.transaction(QUESTION_BANK_IMAGE_ASSETS_STORE, 'readonly')
+        .objectStore(QUESTION_BANK_IMAGE_ASSETS_STORE)
+        .get(id),
+    ).then((asset) => asset ?? null);
+  } catch (error) {
+    throw toQuestionBankDbError('Question image loading failed.', error);
+  } finally {
+    db.close();
+  }
+}
+
 export async function getStoredQuestionBank(): Promise<StoredQuestionBank | null> {
   const db = await openQuestionBankDb();
 
@@ -91,17 +116,27 @@ export async function getStoredQuestionBank(): Promise<StoredQuestionBank | null
   }
 }
 
-export async function replaceStoredQuestionBank(metadata: StoredQuestionBankMetadata, questions: readonly Question[]): Promise<void> {
+export async function replaceStoredQuestionBank(
+  metadata: StoredQuestionBankMetadata,
+  questions: readonly Question[],
+  imageAssets: readonly StoredQuestionImageAsset[] = [],
+): Promise<void> {
   const db = await openQuestionBankDb();
 
   try {
-    const transaction = db.transaction([QUESTION_BANK_METADATA_STORE, QUESTION_BANK_QUESTIONS_STORE], 'readwrite');
+    const transaction = db.transaction(
+      [QUESTION_BANK_METADATA_STORE, QUESTION_BANK_QUESTIONS_STORE, QUESTION_BANK_IMAGE_ASSETS_STORE],
+      'readwrite',
+    );
     const metadataStore = transaction.objectStore(QUESTION_BANK_METADATA_STORE);
     const questionsStore = transaction.objectStore(QUESTION_BANK_QUESTIONS_STORE);
+    const imageAssetsStore = transaction.objectStore(QUESTION_BANK_IMAGE_ASSETS_STORE);
 
     questionsStore.clear();
+    imageAssetsStore.clear();
     metadataStore.put(metadata);
     questions.forEach((question) => questionsStore.put(question));
+    imageAssets.forEach((asset) => imageAssetsStore.put(asset));
 
     await transactionDone(transaction);
   } catch (error) {
@@ -115,9 +150,13 @@ export async function clearStoredQuestionBank(): Promise<void> {
   const db = await openQuestionBankDb();
 
   try {
-    const transaction = db.transaction([QUESTION_BANK_METADATA_STORE, QUESTION_BANK_QUESTIONS_STORE], 'readwrite');
+    const transaction = db.transaction(
+      [QUESTION_BANK_METADATA_STORE, QUESTION_BANK_QUESTIONS_STORE, QUESTION_BANK_IMAGE_ASSETS_STORE],
+      'readwrite',
+    );
     transaction.objectStore(QUESTION_BANK_METADATA_STORE).clear();
     transaction.objectStore(QUESTION_BANK_QUESTIONS_STORE).clear();
+    transaction.objectStore(QUESTION_BANK_IMAGE_ASSETS_STORE).clear();
     await transactionDone(transaction);
   } catch (error) {
     throw toQuestionBankDbError('題庫儲存失敗，請確認瀏覽器儲存空間後再試一次。', error);
@@ -150,6 +189,10 @@ function openQuestionBankDb(): Promise<IDBDatabase> {
         questionsStore.createIndex('type', 'type', { unique: false });
         questionsStore.createIndex('learningTheme', 'learningTheme', { unique: false });
         questionsStore.createIndex('coreConcept', 'coreConcept', { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(QUESTION_BANK_IMAGE_ASSETS_STORE)) {
+        db.createObjectStore(QUESTION_BANK_IMAGE_ASSETS_STORE, { keyPath: 'id' });
       }
     };
     request.onsuccess = () => resolve(request.result);

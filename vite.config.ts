@@ -12,7 +12,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       includeAssets: [
-        'questions.csv',
+        'JLS_094_115_v5.0.zip',
         'icons/apple-touch-icon.png',
         'icons/favicon.png',
         'icons/pwa-192x192.png',
@@ -60,16 +60,16 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,csv,woff,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallback: `${base}index.html`,
         navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.toString().endsWith('/questions.csv'),
+            urlPattern: ({ url }) => url.toString().endsWith('/JLS_094_115_v5.0.zip'),
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'jls-default-question-bank-v4.3.0',
+              cacheName: 'jls-default-question-bank-v5.0.0',
               cacheableResponse: {
                 statuses: [200],
               },

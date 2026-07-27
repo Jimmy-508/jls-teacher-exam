@@ -8,10 +8,26 @@ const storage = vi.hoisted(() => ({
 const indexedDb = vi.hoisted(() => ({
   metadata: null as unknown,
   questions: [] as unknown[],
-  replaceStoredQuestionBank: vi.fn(async (metadata: unknown, questions: readonly unknown[]) => {
-    indexedDb.metadata = metadata;
-    indexedDb.questions = [...questions];
-  }),
+  imageAssets: [] as unknown[],
+  replaceStoredQuestionBank: vi.fn(
+    async (metadata: unknown, questions: readonly unknown[], imageAssets: readonly unknown[] = []) => {
+      indexedDb.metadata = metadata;
+      indexedDb.questions = [...questions];
+      indexedDb.imageAssets = [...imageAssets];
+    },
+  ),
+}));
+
+const defaultZip = vi.hoisted(() => ({
+  imageAssets: [
+    {
+      id: 'zip/images%2Fdefault.png',
+      fileName: 'images/default.png',
+      mimeType: 'image/png',
+      blob: new Blob(['default image'], { type: 'image/png' }),
+      updatedAt: '2026-07-28T00:00:00.000Z',
+    },
+  ],
 }));
 
 vi.mock('./storageService', () => ({
@@ -37,6 +53,24 @@ vi.mock('./questionBankIndexedDbService', () => ({
   replaceStoredQuestionBank: indexedDb.replaceStoredQuestionBank,
 }));
 
+vi.mock('./questionBankImportService', async () => {
+  const actual = await vi.importActual<typeof import('./questionBankValidator')>('./questionBankValidator');
+
+  return {
+    readQuestionBankZipBlob: vi.fn(async (blob: Blob) => {
+      const csvText = await blob.text();
+      const parsedQuestionBank = actual.parseAndValidateQuestionBankCsv(csvText);
+      return {
+        csvText,
+        parsedQuestionBank,
+        imageAssets: defaultZip.imageAssets,
+        imageWarnings: [],
+      };
+    }),
+  };
+});
+
+import { readQuestionBankZipBlob } from './questionBankImportService';
 import { load, remove } from './storageService';
 import {
   getActiveQuestionBank,
@@ -56,6 +90,7 @@ describe('questionBankStorageService', () => {
     storage.values.clear();
     indexedDb.metadata = null;
     indexedDb.questions = [];
+    indexedDb.imageAssets = [];
     vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
@@ -111,7 +146,7 @@ describe('questionBankStorageService', () => {
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        text: async () => validCsv.replace('Q1', 'Q2'),
+        blob: async () => new Blob([validCsv.replace('Q1', 'Q2')], { type: 'application/zip' }),
       })),
     );
 
@@ -138,7 +173,7 @@ describe('questionBankStorageService', () => {
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        text: async () => validCsv.replace('Q1', 'NEW_DEFAULT'),
+        blob: async () => new Blob([validCsv.replace('Q1', 'NEW_DEFAULT')], { type: 'application/zip' }),
       })),
     );
 
@@ -146,7 +181,7 @@ describe('questionBankStorageService', () => {
 
     expect(activeQuestionBank.source).toBe('default');
     expect(activeQuestionBank.questions[0].id).toBe('NEW_DEFAULT');
-    expect(activeQuestionBank.metadata.defaultBankVersion).toBe('4.3.0');
+    expect(activeQuestionBank.metadata.defaultBankVersion).toBe('5.0.0');
   });
 
   it('does not replace a user imported question bank when the app version changes', async () => {
@@ -191,7 +226,7 @@ describe('questionBankStorageService', () => {
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        text: async () => validCsv.replace('Q1', 'DEFAULT_Q1'),
+        blob: async () => new Blob([validCsv.replace('Q1', 'DEFAULT_Q1')], { type: 'application/zip' }),
       })),
     );
 

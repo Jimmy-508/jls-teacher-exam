@@ -857,6 +857,36 @@ describe('PracticePage controls', () => {
     ).toBe(false);
   });
 
+  it('keeps option image asset references through practice selection for image-only choices', () => {
+    const imageQuestion = createQuestion('Q32', {
+      questionNumber: '32',
+      stemImage: 'jls-question-image:zip/stem.png',
+      optionA: '',
+      optionB: '',
+      optionC: '',
+      optionD: '',
+      optionAImage: 'jls-question-image:zip/a.png',
+      optionBImage: 'jls-question-image:zip/b.png',
+      optionCImage: 'jls-question-image:zip/c.png',
+      optionDImage: 'jls-question-image:zip/d.png',
+    });
+
+    const selected = selectPracticeQuestions({
+      filteredQuestions: [imageQuestion],
+      loadedQuestions: [imageQuestion],
+      questionCount: 5,
+      restoredSession: null,
+      typeFilter: 'choice',
+    });
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0].stemImage).toBe('jls-question-image:zip/stem.png');
+    expect(selected[0].optionAImage).toBe('jls-question-image:zip/a.png');
+    expect(selected[0].optionBImage).toBe('jls-question-image:zip/b.png');
+    expect(selected[0].optionCImage).toBe('jls-question-image:zip/c.png');
+    expect(selected[0].optionDImage).toBe('jls-question-image:zip/d.png');
+  });
+
   it('keeps Knowledge questionIds as the practice scope when switching question types', () => {
     const loadedQuestions = [
       createQuestion('C1', { type: CHOICE_QUESTION_TYPE }),
@@ -905,6 +935,48 @@ describe('PracticePage controls', () => {
     expect(html).toContain('參考答案');
     expect(html).toContain('非選參考答案內容');
     expect(html).not.toContain('作答回饋參考');
+  });
+
+  it('renders an essay stem image and image note before the answer field', () => {
+    const html = renderToStaticMarkup(
+      <EssayPracticeCard
+        answer=""
+        errorMessage=""
+        isGeneratingFeedback={false}
+        isLastQuestion={false}
+        onAnswerChange={() => undefined}
+        onNext={() => undefined}
+        onSubmit={() => undefined}
+        question={createEssayQuestion('E1', {
+          stemImage: '/images/essay-stem.png',
+          imageNote: 'Essay image note',
+        })}
+      />,
+    );
+
+    expect(html).toContain('class="question-image question-stem-image"');
+    expect(html).toContain('src="/images/essay-stem.png"');
+    expect(html).toContain('Essay image note');
+    expect(html.indexOf('question-stem-image')).toBeLessThan(html.indexOf('essay-score'));
+    expect(html.indexOf('Essay image note')).toBeLessThan(html.indexOf('<textarea'));
+  });
+
+  it('keeps an essay without images free of image markup', () => {
+    const html = renderToStaticMarkup(
+      <EssayPracticeCard
+        answer=""
+        errorMessage=""
+        isGeneratingFeedback={false}
+        isLastQuestion={false}
+        onAnswerChange={() => undefined}
+        onNext={() => undefined}
+        onSubmit={() => undefined}
+        question={createEssayQuestion()}
+      />,
+    );
+
+    expect(html).not.toContain('question-stem-image');
+    expect(html).not.toContain('question-image-note');
   });
 
   it('shows feedback first and only one reference answer block after essay submit', () => {
@@ -1019,12 +1091,13 @@ function createQuestion(id: string, overrides: Partial<Question> = {}): Question
   };
 }
 
-function createEssayQuestion(id = 'E1'): Question {
+function createEssayQuestion(id = 'E1', overrides: Partial<Question> = {}): Question {
   return {
     ...createQuestion(id),
     type: ESSAY_QUESTION_TYPE,
     score: 10,
     essayReferenceAnswer: '非選參考答案內容',
+    ...overrides,
   };
 }
 

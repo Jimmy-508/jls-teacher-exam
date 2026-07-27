@@ -5,6 +5,8 @@ import { saveBlobWithPicker, type SaveBlobResult } from './fileSaveService';
 import { LEARNING_RECORDS_STORAGE_KEY } from './learningEngine';
 import { JLS_LEARNING_RECORDS_STORAGE_KEY } from './storageKeys';
 import { load } from './storageService';
+import { getStoredQuestionImageAsset } from './questionBankIndexedDbService';
+import { getQuestionImageAssetId, isQuestionImageAssetReference } from './questionImageAssetService';
 import { buildExamYearOptions, compareExamYearsDescending } from './yearService';
 import {
   compareLocalDateRange,
@@ -75,6 +77,17 @@ export interface WrongQuestionPdfDebugMetadata {
     firstLineX: number;
     hangingLineX: number;
   }>;
+  questionImages: Array<{
+    source: string;
+    pageIndex: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    status: 'rendered' | 'failed';
+  }>;
+  imageLoadCount: number;
+  revokedObjectUrlCount: number;
 }
 
 let lastWrongQuestionPdfDebugMetadata: WrongQuestionPdfDebugMetadata | null = null;
@@ -408,6 +421,9 @@ type PdfBlockKind =
   | 'questionHeading'
   | 'questionStem'
   | 'questionOption'
+  | 'questionImage'
+  | 'questionImageNote'
+  | 'imageLoadFailure'
   | 'analysisAnswer'
   | 'analysisContent'
   | 'analysisOption'
@@ -417,7 +433,7 @@ interface PdfSection {
   kind: 'questions' | 'analysis';
   forceNewPage: boolean;
   title: PdfSectionTitle;
-  blocks: PdfTextBlock[];
+  blocks: PdfContentBlock[];
 }
 
 interface PdfSectionTitle {
@@ -430,9 +446,18 @@ interface WrongQuestionPdfDocument {
   analysisSection: PdfSection;
 }
 
+type PdfContentBlock = PdfTextBlock | PdfImageBlock;
+
 interface PdfTextBlock {
-  kind: PdfBlockKind;
+  kind: Exclude<PdfBlockKind, 'questionImage'>;
   text: string;
+}
+
+interface PdfImageBlock {
+  kind: 'questionImage';
+  source: string;
+  alt: string;
+  align: 'center' | 'optionContent';
 }
 
 interface PdfBlockLayout {
@@ -546,6 +571,8 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
   let pageIndex = 1;
   let analysisStartPageIndex: number | null = null;
   const analysisBlockPositions: WrongQuestionPdfDebugMetadata['analysisBlockPositions'] = [];
+  const questionImages: WrongQuestionPdfDebugMetadata['questionImages'] = [];
+  const imageCache = createPdfImageCache();
 
   prepareCanvasPage(context, pageWidth, pageHeight, scale);
 
@@ -583,6 +610,54 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
 
       if (block.kind === 'spacer') {
         y += ptToPx(PDF_LAYOUT.spacing.blankPt);
+        continue;
+      }
+
+      if (block.kind === 'questionImage') {
+        const result = await resolvePdfImage(block.source, imageCache);
+        const imageLeftEdge = getPdfImageLeftEdge(block, context, marginLeft);
+        const imageLayout = result
+          ? getPdfImageLayout(result.width, result.height, imageLeftEdge, rightEdge)
+          : null;
+        const blockHeight = imageLayout
+          ? ptToPx(PDF_LAYOUT.spacing.blankPt) + imageLayout.height + ptToPx(PDF_LAYOUT.spacing.blockAfterPt)
+          : lineHeight + ptToPx(PDF_LAYOUT.spacing.blockAfterPt);
+
+        if (y + blockHeight > pageBottom && hasContent) {
+          await finishCurrentPage();
+        }
+
+        y += imageLayout ? ptToPx(PDF_LAYOUT.spacing.blankPt) : 0;
+
+        if (result && imageLayout) {
+          const x = getPdfImageX(block, imageLeftEdge, rightEdge, imageLayout.width);
+          context.drawImage(result.image, x, y, imageLayout.width, imageLayout.height);
+          questionImages.push({
+            source: block.source,
+            pageIndex,
+            x,
+            y,
+            width: imageLayout.width,
+            height: imageLayout.height,
+            status: 'rendered',
+          });
+          y += imageLayout.height + ptToPx(PDF_LAYOUT.spacing.blockAfterPt);
+        } else {
+          const failureText = '\u5716\u7247\u7121\u6cd5\u8f09\u5165';
+          drawMutedText(context, failureText, marginLeft, y);
+          questionImages.push({
+            source: block.source,
+            pageIndex,
+            x: imageLeftEdge,
+            y,
+            width: 0,
+            height: 0,
+            status: 'failed',
+          });
+          y += lineHeight + ptToPx(PDF_LAYOUT.spacing.blockAfterPt);
+        }
+
+        hasContent = true;
         continue;
       }
 
@@ -638,6 +713,9 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
     analysisTitleDateFontPt: TITLE_DATE_FONT_PT,
     analysisBlocks: documentModel.analysisSection.blocks.filter((block) => block.kind !== 'spacer').length,
     analysisBlockPositions,
+    questionImages,
+    imageLoadCount: imageCache.loadCount,
+    revokedObjectUrlCount: cleanupPdfImageCache(imageCache),
   };
 
   if (import.meta.env.DEV) {
@@ -681,7 +759,7 @@ function buildWrongQuestionPdfDocument(model: WrongQuestionPdfModel): WrongQuest
         text: model.titleText,
         dateLabel: model.formattedExportDate,
       },
-      blocks: buildQuestionBlocks(model.questionLines),
+      blocks: buildQuestionBlocksFromItems(model.items),
     },
     analysisSection: {
       kind: 'analysis',
@@ -695,7 +773,7 @@ function buildWrongQuestionPdfDocument(model: WrongQuestionPdfModel): WrongQuest
   };
 }
 
-function buildQuestionBlocks(lines: readonly string[]): PdfTextBlock[] {
+function buildQuestionBlocks(lines: readonly string[]): PdfContentBlock[] {
   return lines.map((rawLine) => {
     const line = cleanPdfText(rawLine);
 
@@ -710,7 +788,56 @@ function buildQuestionBlocks(lines: readonly string[]): PdfTextBlock[] {
   });
 }
 
-function buildAnalysisBlocks(lines: readonly string[]): PdfTextBlock[] {
+function buildQuestionBlocksFromItems(items: readonly WrongQuestionExportItem[]): PdfContentBlock[] {
+  return items.flatMap(({ question }, index) => {
+    const blocks: PdfContentBlock[] = [
+      { kind: 'questionHeading', text: cleanPdfText(formatQuestionHeading(question)) },
+      { kind: 'questionStem', text: cleanPdfText(`${index + 1}. ${question.stem}`) },
+      ...createQuestionImageBlocks(question.stemImage, `Question ${index + 1} image`, 'center'),
+    ];
+
+    addChoicePdfBlocks(blocks, 'A', question.optionA, question.optionAImage);
+    addChoicePdfBlocks(blocks, 'B', question.optionB, question.optionBImage);
+    addChoicePdfBlocks(blocks, 'C', question.optionC, question.optionCImage);
+    addChoicePdfBlocks(blocks, 'D', question.optionD, question.optionDImage);
+
+    if (hasPdfImageValue(question.imageNote)) {
+      blocks.push({ kind: 'questionImageNote', text: cleanPdfText(question.imageNote ?? '') });
+    }
+
+    blocks.push({ kind: 'spacer', text: '' });
+    return blocks;
+  });
+}
+
+function addChoicePdfBlocks(
+  blocks: PdfContentBlock[],
+  label: ChoiceKey,
+  text: string | undefined,
+  imageSource: string | undefined,
+): void {
+  if (!hasPdfImageValue(text) && !hasPdfImageValue(imageSource)) {
+    return;
+  }
+
+  blocks.push({ kind: 'questionOption', text: cleanPdfText(`(${label}) ${text ?? ''}`) });
+  blocks.push(...createQuestionImageBlocks(imageSource, `Option ${label} image`, 'optionContent'));
+}
+
+function createQuestionImageBlocks(
+  source: string | undefined,
+  alt: string,
+  align: PdfImageBlock['align'],
+): PdfImageBlock[] {
+  const normalized = source?.trim();
+  return normalized ? [{ kind: 'questionImage', source: normalized, alt, align }] : [];
+}
+
+function hasPdfImageValue(value: string | undefined): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function buildAnalysisBlocks(lines: readonly string[]): PdfContentBlock[] {
   return lines.map((rawLine) => {
     const line = cleanPdfText(rawLine);
 
@@ -725,7 +852,7 @@ function buildAnalysisBlocks(lines: readonly string[]): PdfTextBlock[] {
   });
 }
 
-function classifyQuestionLine(line: string): PdfBlockKind {
+function classifyQuestionLine(line: string): PdfTextBlock['kind'] {
   if (/^【.+】$/.test(line)) {
     return 'questionHeading';
   }
@@ -741,8 +868,8 @@ function classifyQuestionLine(line: string): PdfBlockKind {
   return 'questionStem';
 }
 
-function classifyAnalysisLine(line: string): PdfBlockKind {
-  if (/^\d+\.\s*答案：/.test(line)) {
+function classifyAnalysisLine(line: string): PdfTextBlock['kind'] {
+  if (/^\d+\.\s*/.test(line)) {
     return 'analysisAnswer';
   }
 
@@ -783,15 +910,19 @@ function wrapPdfBlock(
   });
 }
 
+function isTextPreviewBlock(block: PdfContentBlock): block is PdfTextBlock {
+  return block.kind !== 'spacer' && block.kind !== 'questionImage';
+}
+
 function getNextTextBlockPreviewHeight(
-  blocks: readonly PdfTextBlock[],
+  blocks: readonly PdfContentBlock[],
   currentIndex: number,
   context: CanvasRenderingContext2D,
   marginLeft: number,
   rightEdge: number,
   lineHeight: number,
 ): number {
-  const nextBlock = blocks.slice(currentIndex + 1).find((block) => block.kind !== 'spacer');
+  const nextBlock = blocks.slice(currentIndex + 1).find(isTextPreviewBlock);
 
   if (!nextBlock) {
     return 0;
@@ -807,6 +938,10 @@ function getNextTextBlockPreviewHeight(
 
 function getBlockIndentPx(kind: PdfBlockKind): number {
   if (kind === 'questionOption') {
+    return ptToPx(PDF_LAYOUT.question.optionIndentPt);
+  }
+
+  if (kind === 'questionImageNote' || kind === 'imageLoadFailure') {
     return ptToPx(PDF_LAYOUT.question.optionIndentPt);
   }
 
@@ -840,7 +975,7 @@ function getBlockHangingLineX(
   }
 
   if (kind === 'analysisAnswer') {
-    return firstLineX + measurePlainText(context, '國'.repeat(PDF_LAYOUT.analysis.answerHangingIndentChars));
+    return firstLineX + measurePlainText(context, '\u570b'.repeat(PDF_LAYOUT.analysis.answerHangingIndentChars));
   }
 
   if (kind === 'questionStem') {
@@ -849,6 +984,10 @@ function getBlockHangingLineX(
 
   if (kind === 'analysisContent') {
     return firstLineX + measureMatchedPrefix(context, text, /^(.+?：)/);
+  }
+
+  if (kind === 'questionImageNote' || kind === 'imageLoadFailure') {
+    return firstLineX;
   }
 
   return firstLineX;
@@ -977,6 +1116,144 @@ function trimLineRuns(runs: readonly TextRun[]): TextRun[] {
   }
 
   return clonedRuns.filter((run) => run.text.length > 0);
+}
+
+interface LoadedPdfImage {
+  image: CanvasImageSource;
+  width: number;
+  height: number;
+  objectUrl?: string;
+}
+
+interface PdfImageCache {
+  images: Map<string, Promise<LoadedPdfImage | null>>;
+  objectUrls: Set<string>;
+  loadCount: number;
+}
+
+function createPdfImageCache(): PdfImageCache {
+  return { images: new Map(), objectUrls: new Set(), loadCount: 0 };
+}
+
+async function resolvePdfImage(source: string, cache: PdfImageCache): Promise<LoadedPdfImage | null> {
+  const normalizedSource = source.trim();
+  if (!normalizedSource) {
+    return null;
+  }
+
+  let cached = cache.images.get(normalizedSource);
+  if (!cached) {
+    cache.loadCount += 1;
+    cached = loadPdfImage(normalizedSource, cache).catch(() => null);
+    cache.images.set(normalizedSource, cached);
+  }
+
+  return cached;
+}
+
+async function loadPdfImage(source: string, cache: PdfImageCache): Promise<LoadedPdfImage | null> {
+  const resolvedSource = await resolvePdfImageUrl(source, cache);
+  if (!resolvedSource) {
+    return null;
+  }
+
+  return loadImageElement(resolvedSource.url, resolvedSource.objectUrl);
+}
+
+async function resolvePdfImageUrl(
+  source: string,
+  cache: PdfImageCache,
+): Promise<{ url: string; objectUrl?: string } | null> {
+  if (isQuestionImageAssetReference(source)) {
+    const asset = await getStoredQuestionImageAsset(getQuestionImageAssetId(source));
+    if (!asset) {
+      return null;
+    }
+
+    const objectUrl = URL.createObjectURL(asset.blob);
+    cache.objectUrls.add(objectUrl);
+    return { url: objectUrl, objectUrl };
+  }
+
+  return { url: source };
+}
+
+function loadImageElement(url: string, objectUrl?: string): Promise<LoadedPdfImage | null> {
+  if (typeof Image === 'undefined') {
+    return Promise.resolve(null);
+  }
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const width = image.naturalWidth || image.width;
+      const height = image.naturalHeight || image.height;
+      resolve(width > 0 && height > 0 ? { image, width, height, objectUrl } : null);
+    };
+    image.onerror = () => resolve(null);
+
+    if (/^https?:/i.test(url)) {
+      image.crossOrigin = 'anonymous';
+    }
+
+    image.src = url;
+  });
+}
+
+function cleanupPdfImageCache(cache: PdfImageCache): number {
+  let revoked = 0;
+  cache.objectUrls.forEach((url) => {
+    URL.revokeObjectURL(url);
+    revoked += 1;
+  });
+  cache.objectUrls.clear();
+  return revoked;
+}
+
+function getPdfImageLeftEdge(
+  block: PdfImageBlock,
+  context: CanvasRenderingContext2D,
+  marginLeft: number,
+): number {
+  if (block.align === 'optionContent') {
+    return marginLeft + ptToPx(PDF_LAYOUT.question.optionIndentPt) + measureTextRun(context, { text: '(A) ', script: 'latin' });
+  }
+
+  return marginLeft;
+}
+
+function getPdfImageX(
+  block: PdfImageBlock,
+  leftEdge: number,
+  rightEdge: number,
+  imageWidth: number,
+): number {
+  if (block.align === 'optionContent') {
+    return leftEdge;
+  }
+
+  return leftEdge + Math.round((rightEdge - leftEdge - imageWidth) / 2);
+}
+
+function getPdfImageLayout(
+  naturalWidth: number,
+  naturalHeight: number,
+  leftEdge: number,
+  rightEdge: number,
+): { width: number; height: number } {
+  const availableWidth = Math.max(1, rightEdge - leftEdge);
+  const scale = naturalWidth > availableWidth ? availableWidth / naturalWidth : 1;
+  return {
+    width: Math.max(1, Math.round(naturalWidth * scale)),
+    height: Math.max(1, Math.round(naturalHeight * scale)),
+  };
+}
+
+function drawMutedText(context: CanvasRenderingContext2D, text: string, x: number, y: number): void {
+  const previousFillStyle = context.fillStyle;
+  context.fillStyle = '#6b7280';
+  drawRuns(context, [{ text, script: 'chinese' }], x, y, BODY_FONT_PT * RENDER_SCALE);
+  context.fillStyle = previousFillStyle;
 }
 
 function createCanvas(width: number, height: number): HTMLCanvasElement {

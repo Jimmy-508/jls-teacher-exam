@@ -16,6 +16,7 @@ import {
 import type { LearningRecord } from '../types/LearningRecord';
 import type { Question } from '../types/question';
 import type { WrongQuestionFilters } from '../types/WrongQuestionExport';
+import * as questionBankIndexedDbService from './questionBankIndexedDbService';
 
 describe('wrongQuestionExportService', () => {
   afterEach(() => {
@@ -210,6 +211,235 @@ describe('wrongQuestionExportService', () => {
     expect(renderedText).toContain('07/12');
     expect(renderedText).not.toContain('解析：');
   });
+  it('renders stem and A-D option images in the wrong-question PDF', async () => {
+    const contexts = installCanvasMock();
+    installImageMock({ width: 240, height: 120 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{
+        question: createQuestion({
+          id: 'image-q1',
+          stemImage: 'data:image/png;base64,stem',
+          optionAImage: 'data:image/png;base64,a',
+          optionBImage: 'data:image/png;base64,b',
+          optionCImage: 'data:image/png;base64,c',
+          optionDImage: 'data:image/png;base64,d',
+          imageNote: 'Image note',
+        }),
+        wrongCount: 1,
+      }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const metadata = getLastWrongQuestionPdfDebugMetadata();
+    const renderedText = contexts.flatMap((context) => context.fillText.mock.calls.map((call) => String(call[0])));
+
+    const images = metadata?.questionImages ?? [];
+    const [stemImage, ...optionImages] = images;
+
+    expect(images).toHaveLength(5);
+    expect(images.every((image) => image.status === 'rendered')).toBe(true);
+    expect(stemImage?.x).toBe(476);
+    expect(optionImages.map((image) => image.x)).toEqual([148, 148, 148, 148]);
+    expect(optionImages.every((image) => image.x < (stemImage?.x ?? 0))).toBe(true);
+    expect(contexts.flatMap((context) => context.drawImage.mock.calls)).toHaveLength(5);
+    expect(renderedText).toContain('Image note');
+  });
+
+  it('keeps option labels when an option only has an image', async () => {
+    const contexts = installCanvasMock();
+    installImageMock({ width: 160, height: 80 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{
+        question: createQuestion({
+          id: 'image-only-option',
+          optionA: '',
+          optionAImage: 'data:image/png;base64,a',
+        }),
+        wrongCount: 1,
+      }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const renderedText = contexts.flatMap((context) => context.fillText.mock.calls.map((call) => String(call[0])));
+    const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
+
+    expect(renderedText).toContain('(A)');
+    expect(image?.x).toBe(148);
+    expect(image?.x).toBeGreaterThan(100);
+  });
+
+  it('centers images within the content width and does not enlarge small images', async () => {
+    installCanvasMock();
+    installImageMock({ width: 120, height: 60 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ stemImage: 'data:image/png;base64,small' }), wrongCount: 1 }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
+    expect(image?.width).toBe(120);
+    expect(image?.height).toBe(60);
+    expect(image?.x).toBe(536);
+  });
+
+  it('shrinks oversized images proportionally and keeps them centered', async () => {
+    installCanvasMock();
+    installImageMock({ width: 2000, height: 1000 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ stemImage: 'data:image/png;base64,wide' }), wrongCount: 1 }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
+    expect(image?.width).toBe(1047);
+    expect(image?.height).toBe(524);
+    expect(image?.x).toBe(72);
+  });
+
+  it('shrinks oversized option images using the remaining option content width', async () => {
+    installCanvasMock();
+    installImageMock({ width: 2000, height: 1000 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ optionAImage: 'data:image/png;base64,wide-option' }), wrongCount: 1 }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
+    expect(image?.x).toBe(148);
+    expect(image?.width).toBe(971);
+    expect(image?.height).toBe(486);
+    expect((image?.x ?? 0) + (image?.width ?? 0)).toBeLessThanOrEqual(1119);
+  });
+
+  it('moves an image to the next page when it does not fit in the remaining page space', async () => {
+    installCanvasMock();
+    installImageMock({ width: 900, height: 900 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{
+        question: createQuestion({
+          stem: 'Long stem '.repeat(240),
+          stemImage: 'data:image/png;base64,next-page',
+        }),
+        wrongCount: 1,
+      }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    expect(getLastWrongQuestionPdfDebugMetadata()?.questionImages[0]?.pageIndex).toBeGreaterThan(1);
+  });
+
+  it('loads IndexedDB image assets and cleans object URLs after export', async () => {
+    installCanvasMock();
+    installImageMock({ width: 200, height: 100 });
+    const createObjectUrl = vi.fn(() => 'blob:jls-image');
+    const revokeObjectUrl = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL: createObjectUrl, revokeObjectURL: revokeObjectUrl });
+    vi.spyOn(questionBankIndexedDbService, 'getStoredQuestionImageAsset').mockResolvedValue({
+      id: 'asset-a',
+      fileName: 'a.png',
+      mimeType: 'image/png',
+      blob: new Blob(['png'], { type: 'image/png' }),
+      updatedAt: '2026-07-27T00:00:00.000Z',
+    });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ optionAImage: 'jls-question-image:asset-a' }), wrongCount: 1 }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    expect(questionBankIndexedDbService.getStoredQuestionImageAsset).toHaveBeenCalledWith('asset-a');
+    expect(createObjectUrl).toHaveBeenCalledTimes(1);
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:jls-image');
+    expect(getLastWrongQuestionPdfDebugMetadata()?.revokedObjectUrlCount).toBe(1);
+  });
+
+  it('reuses the same image source without loading it repeatedly', async () => {
+    installCanvasMock();
+    installImageMock({ width: 200, height: 100 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{
+        question: createQuestion({
+          stemImage: 'data:image/png;base64,shared',
+          optionAImage: 'data:image/png;base64,shared',
+        }),
+        wrongCount: 1,
+      }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    expect(getLastWrongQuestionPdfDebugMetadata()?.questionImages).toHaveLength(2);
+    expect(getLastWrongQuestionPdfDebugMetadata()?.imageLoadCount).toBe(1);
+  });
+
+  it('renders PNG, JPEG, and WEBP image sources through the canvas pipeline', async () => {
+    installCanvasMock();
+    installImageMock({ width: 180, height: 90 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{
+        question: createQuestion({
+          stemImage: 'data:image/png;base64,png',
+          optionAImage: 'data:image/jpeg;base64,jpeg',
+          optionBImage: 'data:image/webp;base64,webp',
+        }),
+        wrongCount: 1,
+      }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    expect(getLastWrongQuestionPdfDebugMetadata()?.questionImages.map((image) => image.status)).toEqual([
+      'rendered',
+      'rendered',
+      'rendered',
+    ]);
+  });
+
+  it('keeps exporting the PDF when an image cannot be loaded', async () => {
+    const contexts = installCanvasMock();
+    installImageMock({ width: 200, height: 100, fail: true });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ stem: 'Plain stem text', stemImage: 'data:image/png;base64,broken' }), wrongCount: 1 }],
+    });
+
+    const blob = await createWrongQuestionPdfBlobFromModel(model);
+
+    const renderedText = contexts.flatMap((context) => context.fillText.mock.calls.map((call) => String(call[0])));
+    expect(blob.type).toBe('application/pdf');
+    expect(getLastWrongQuestionPdfDebugMetadata()?.questionImages[0]?.status).toBe('failed');
+    expect(renderedText).toContain('\u5716\u7247\u7121\u6cd5\u8f09\u5165');
+    expect(renderedText.join('')).toContain('Plain stem text');
+  });
+
+  it('does not add image metadata for questions without images', async () => {
+    installCanvasMock();
+    installImageMock({ width: 200, height: 100 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ id: 'no-image' }), wrongCount: 1 }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    expect(getLastWrongQuestionPdfDebugMetadata()?.questionImages).toEqual([]);
+  });
+
 });
 
 function createQuestion(overrides: Partial<Question> = {}): Question {
@@ -311,7 +541,39 @@ function installCanvasMock() {
 
 type MockCanvasContext = CanvasRenderingContext2D & {
   fillText: ReturnType<typeof vi.fn>;
+  drawImage: ReturnType<typeof vi.fn>;
 };
+
+interface MockImageOptions {
+  width: number;
+  height: number;
+  fail?: boolean;
+}
+
+function installImageMock(options: MockImageOptions): void {
+  class MockImage {
+    naturalWidth = options.width;
+    naturalHeight = options.height;
+    width = options.width;
+    height = options.height;
+    crossOrigin = '';
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+
+    set src(_value: string) {
+      queueMicrotask(() => {
+        if (options.fail) {
+          this.onerror?.();
+          return;
+        }
+
+        this.onload?.();
+      });
+    }
+  }
+
+  vi.stubGlobal('Image', MockImage);
+}
 
 function createMockCanvasContext(): MockCanvasContext {
   return {
@@ -325,6 +587,7 @@ function createMockCanvasContext(): MockCanvasContext {
     resetTransform: vi.fn(),
     fillRect: vi.fn(),
     fillText: vi.fn(),
+    drawImage: vi.fn(),
     measureText: (text: string) => ({ width: text.length * 12 }) as TextMetrics,
   } as unknown as MockCanvasContext;
 }

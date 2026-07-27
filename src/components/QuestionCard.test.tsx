@@ -64,9 +64,76 @@ describe('QuestionCard', () => {
     expect(html).not.toContain('answer-panel answer-panel--wrong');
     expect(html).not.toContain('answer-panel answer-panel--correct');
   });
+
+  it('renders a stem image below the stem when provided', () => {
+    const html = renderQuestionCard({}, undefined, { stemImage: '/images/stem.png' });
+
+    expect(html).toContain('class="question-image question-stem-image"');
+    expect(html).toContain('src="/images/stem.png"');
+  });
+
+  it('does not render a stem image when the value is blank', () => {
+    const html = renderQuestionCard({}, undefined, { stemImage: '   ' });
+
+    expect(html).not.toContain('question-stem-image');
+  });
+
+  it('renders option images below each matching option text', () => {
+    const html = renderQuestionCard({}, undefined, {
+      optionAImage: '/images/a.png',
+      optionBImage: '/images/b.png',
+      optionCImage: '/images/c.png',
+      optionDImage: '/images/d.png',
+    });
+
+    expect(html).toContain('src="/images/a.png"');
+    expect(html).toContain('src="/images/b.png"');
+    expect(html).toContain('src="/images/c.png"');
+    expect(html).toContain('src="/images/d.png"');
+    expect(html.match(/choice-button__image/g)).toHaveLength(4);
+  });
+
+  it('renders image-only options instead of dropping them', () => {
+    const html = renderQuestionCard({}, undefined, {
+      optionA: '',
+      optionB: '',
+      optionC: '',
+      optionD: '',
+      optionAImage: '/images/a.png',
+      optionBImage: '/images/b.png',
+      optionCImage: '/images/c.png',
+      optionDImage: '/images/d.png',
+    });
+
+    expect(html.match(/choice-button__key/g)).toHaveLength(4);
+    expect(html.match(/choice-button__image/g)).toHaveLength(4);
+    expect(html).toContain('src="/images/a.png"');
+    expect(html).toContain('src="/images/d.png"');
+  });
+
+  it('renders image note only when provided', () => {
+    const htmlWithNote = renderQuestionCard({}, undefined, { imageNote: 'Image note text' });
+    const htmlWithoutNote = renderQuestionCard({});
+
+    expect(htmlWithNote).toContain('class="question-image-note"');
+    expect(htmlWithNote).toContain('Image note text');
+    expect(htmlWithoutNote).not.toContain('question-image-note');
+  });
+
+  it('keeps the existing markup when no question images are provided', () => {
+    const html = renderQuestionCard({});
+
+    expect(html).not.toContain('question-image');
+    expect(html).not.toContain('choice-button__image');
+    expect(html).not.toContain('question-image-note');
+  });
 });
 
-function renderQuestionCard(answerOverrides: Partial<PracticeAnswer>, answerHeadline?: ReactNode): string {
+function renderQuestionCard(
+  answerOverrides: Partial<PracticeAnswer>,
+  answerHeadline?: ReactNode,
+  questionOverrides: Partial<Question> = {},
+): string {
   const answer: PracticeAnswer = {
     questionId: 'q1',
     selectedAnswer: 'A',
@@ -77,7 +144,7 @@ function renderQuestionCard(answerOverrides: Partial<PracticeAnswer>, answerHead
 
   return renderToStaticMarkup(
     <QuestionCard
-      question={createQuestion()}
+      question={createQuestion(questionOverrides)}
       answer={answer}
       answerHeadline={answerHeadline}
       onSelectAnswer={() => undefined}
@@ -88,7 +155,7 @@ function renderQuestionCard(answerOverrides: Partial<PracticeAnswer>, answerHead
   );
 }
 
-function createQuestion(): Question {
+function createQuestion(overrides: Partial<Question> = {}): Question {
   return {
     id: 'q1',
     year: '115',
@@ -106,5 +173,6 @@ function createQuestion(): Question {
     optionC: 'C',
     optionD: 'D',
     correctAnswer: 'B',
+    ...overrides,
   };
 }

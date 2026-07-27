@@ -15,6 +15,12 @@ export const QUESTION_BANK_FIELDS = {
   optionB: 'B',
   optionC: 'C',
   optionD: 'D',
+  stemImage: '題目圖片',
+  optionAImage: 'A圖片',
+  optionBImage: 'B圖片',
+  optionCImage: 'C圖片',
+  optionDImage: 'D圖片',
+  imageNote: '圖片備註',
   correctAnswer: '標準答案',
   myAnswer: '我的答案',
   isCorrect: '是否答對',
@@ -79,6 +85,12 @@ export const QUESTION_BANK_TEMPLATE_HEADERS = [
   QUESTION_BANK_FIELDS.shortcutKeywords,
   QUESTION_BANK_FIELDS.coreConceptSynonyms,
   QUESTION_BANK_FIELDS.bonusConcepts,
+  QUESTION_BANK_FIELDS.stemImage,
+  QUESTION_BANK_FIELDS.optionAImage,
+  QUESTION_BANK_FIELDS.optionBImage,
+  QUESTION_BANK_FIELDS.optionCImage,
+  QUESTION_BANK_FIELDS.optionDImage,
+  QUESTION_BANK_FIELDS.imageNote,
 ] as const;
 
 export const REQUIRED_QUESTION_BANK_HEADERS = [
