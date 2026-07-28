@@ -163,7 +163,7 @@ export default function PracticePage() {
   const requestedLearningTheme = practiceLocationState.learningTheme;
   const requestedSubject = practiceLocationState.subject;
   const requestedQuestionIds = practiceLocationState.questionIds;
-  const isTodayFocusedPractice = isTodayQuestionIdPracticeScope(practiceLocationState);
+  const isQuestionIdScopedPractice = isQuestionIdPracticeScope(practiceLocationState);
   const [typeFilter, setTypeFilter] = useState<PracticeQuestionTypeFilter>('choice');
   const [filters, setFilters] = useState<PracticeFilters>(() => ({
     ...DEFAULT_PRACTICE_FILTERS,
@@ -212,7 +212,7 @@ export default function PracticePage() {
         const practiceQuestionCountLimit = getScopedEligibleQuestionCount({
           filteredQuestions,
           requestedQuestionIds,
-          shouldLimitToRequestedQuestionIds: isTodayFocusedPractice,
+          shouldLimitToRequestedQuestionIds: isQuestionIdScopedPractice,
         });
         const effectiveQuestionCount = getEffectivePracticeQuestionCount(questionCount, practiceQuestionCountLimit);
         const savedSession = await load<PracticeSession>(ACTIVE_PRACTICE_SESSION_STORAGE_KEY);
@@ -299,7 +299,7 @@ export default function PracticePage() {
     requestedLearningTheme,
     requestedQuestionIds,
     requestedSubject,
-    isTodayFocusedPractice,
+    isQuestionIdScopedPractice,
     typeFilter,
     questionCount,
     filters,
@@ -322,9 +322,9 @@ export default function PracticePage() {
       getScopedEligibleQuestionCount({
         filteredQuestions: eligibleQuestions,
         requestedQuestionIds,
-        shouldLimitToRequestedQuestionIds: isTodayFocusedPractice,
+        shouldLimitToRequestedQuestionIds: isQuestionIdScopedPractice,
       }),
-    [eligibleQuestions, requestedQuestionIds, isTodayFocusedPractice],
+    [eligibleQuestions, requestedQuestionIds, isQuestionIdScopedPractice],
   );
 
   useEffect(() => {
@@ -810,6 +810,10 @@ function getPracticeTypeLabel(value: PracticeQuestionTypeFilter): string {
   return practiceTypeOptions.find((option) => option.value === value)?.label ?? '選擇題';
 }
 
+export function isQuestionIdPracticeScope({ questionIds }: { questionIds?: readonly string[] }): boolean {
+  return Boolean(questionIds?.length);
+}
+
 export function isTodayQuestionIdPracticeScope({
   fromToday,
   fromTodayRecommendation,
@@ -819,7 +823,7 @@ export function isTodayQuestionIdPracticeScope({
   fromTodayRecommendation?: boolean;
   questionIds?: readonly string[];
 }): boolean {
-  return Boolean((fromToday || fromTodayRecommendation) && questionIds?.length);
+  return Boolean((fromToday || fromTodayRecommendation) && isQuestionIdPracticeScope({ questionIds }));
 }
 
 export function getScopedEligibleQuestionCount({

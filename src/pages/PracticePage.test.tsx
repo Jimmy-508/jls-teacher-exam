@@ -16,6 +16,7 @@ import {
   getScopedEligibleQuestionCount,
   normalizeCustomQuestionCount,
   normalizePracticeFiltersForOptions,
+  isQuestionIdPracticeScope,
   isTodayQuestionIdPracticeScope,
   practiceCountOptions,
   sanitizeCustomQuestionCount,
@@ -343,6 +344,82 @@ describe('PracticePage controls', () => {
     expect(summary).not.toContain('\u9078\u64c7\u984c\u30fb5 \u984c');
   });
 
+  it('limits Knowledge-scoped practice counts to requested question ids', () => {
+    const questions = [
+      createQuestion('K1'),
+      createQuestion('K2'),
+      createQuestion('K3'),
+      createQuestion('K4'),
+      createQuestion('OUTSIDE'),
+    ];
+    const requestedQuestionIds = ['K1', 'K2'];
+    const filteredQuestions = filterPracticeQuestions(questions, DEFAULT_PRACTICE_FILTERS, 'choice');
+    const scopedEligibleQuestionCount = getScopedEligibleQuestionCount({
+      filteredQuestions,
+      requestedQuestionIds,
+      shouldLimitToRequestedQuestionIds: isQuestionIdPracticeScope({ questionIds: requestedQuestionIds }),
+    });
+
+    const presetCounts = [5, 10, 25] as const;
+
+    for (const presetCount of presetCounts) {
+      const effectiveQuestionCount = getEffectivePracticeQuestionCount(presetCount, scopedEligibleQuestionCount);
+      const practiceQuestions = selectPracticeQuestions({
+        filteredQuestions,
+        loadedQuestions: questions,
+        questionCount: effectiveQuestionCount,
+        requestedQuestionIds,
+        restoredSession: null,
+        typeFilter: 'choice',
+      });
+      const summary = buildPracticeSettingsSummary({
+        typeFilter: 'choice',
+        questionCount: getDisplayedPracticeQuestionCount({
+          configuredQuestionCount: presetCount,
+          eligibleQuestionCount: scopedEligibleQuestionCount,
+        }),
+        filters: DEFAULT_PRACTICE_FILTERS,
+      });
+
+      expect(effectiveQuestionCount).toBe(2);
+      expect(practiceQuestions).toHaveLength(2);
+      expect(practiceQuestions.every((question) => requestedQuestionIds.includes(question.id))).toBe(true);
+      expect(summary).toContain('\u9078\u64c7\u984c\u30fb2 \u984c');
+      expect(summary).not.toContain(`\u9078\u64c7\u984c\u30fb${presetCount} \u984c`);
+    }
+
+    expect(scopedEligibleQuestionCount).toBe(2);
+    expect(normalizeCustomQuestionCount({ requestedCount: 10, eligibleQuestionCount: scopedEligibleQuestionCount })).toBe(2);
+  });
+
+  it('re-clamps Knowledge-scoped counts when filters reduce the requested question pool', () => {
+    const questions = [
+      createQuestion('K1', { year: '115' }),
+      createQuestion('K2', { year: '114' }),
+      createQuestion('OUTSIDE', { year: '115' }),
+    ];
+    const requestedQuestionIds = ['K1', 'K2'];
+    const filteredQuestions = filterPracticeQuestions(questions, { ...DEFAULT_PRACTICE_FILTERS, year: '115' }, 'choice');
+    const scopedEligibleQuestionCount = getScopedEligibleQuestionCount({
+      filteredQuestions,
+      requestedQuestionIds,
+      shouldLimitToRequestedQuestionIds: isQuestionIdPracticeScope({ questionIds: requestedQuestionIds }),
+    });
+    const effectiveQuestionCount = getEffectivePracticeQuestionCount(5, scopedEligibleQuestionCount);
+    const practiceQuestions = selectPracticeQuestions({
+      filteredQuestions,
+      loadedQuestions: questions,
+      questionCount: effectiveQuestionCount,
+      requestedQuestionIds,
+      restoredSession: null,
+      typeFilter: 'choice',
+    });
+
+    expect(scopedEligibleQuestionCount).toBe(1);
+    expect(effectiveQuestionCount).toBe(1);
+    expect(practiceQuestions).toHaveLength(1);
+    expect(practiceQuestions[0]?.id).toBe('K1');
+  });
   it('keeps direct Practice counts based on the full eligible question pool', () => {
     const questions = Array.from({ length: 8 }, (_, index) => createQuestion(`D${index + 1}`));
     const filteredQuestions = filterPracticeQuestions(questions, DEFAULT_PRACTICE_FILTERS, 'choice');
