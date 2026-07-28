@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import PwaInstallCard from '../components/PwaInstallCard';
 import {
@@ -9,12 +9,37 @@ import {
   APP_SUBTITLE,
   APP_VERSION,
 } from '../config/appInfo';
+import {
+  COLOR_THEME_OPTIONS,
+  DEFAULT_COLOR_THEME,
+  DEFAULT_FEEDBACK_COLOR_SCHEME,
+  FEEDBACK_COLOR_SCHEME_OPTIONS,
+  applyAppearanceSettings,
+  type AppearanceSettings,
+  type ColorTheme,
+  type FeedbackColorScheme,
+} from '../services/appearanceService';
 import { resetLearningProgress } from '../services/learningProgressResetService';
 import { applyPwaUpdate, checkForPwaUpdate, type PwaUpdateCheckResult } from '../services/pwaService';
 import { DEFAULT_DISPLAY_NAME, getUserSettings, saveUserSettings } from '../services/userSettingsService';
+import type { UserSettings } from '../types/UserSettings';
 
 export default function SettingsPage() {
   const [displayName, setDisplayName] = useState(DEFAULT_DISPLAY_NAME);
+  const [colorTheme, setColorTheme] = useState<ColorTheme>(DEFAULT_COLOR_THEME);
+  const [feedbackColorScheme, setFeedbackColorScheme] = useState<FeedbackColorScheme>(DEFAULT_FEEDBACK_COLOR_SCHEME);
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(false);
+  const savedSettingsRef = useRef<UserSettings>({
+    displayName: DEFAULT_DISPLAY_NAME,
+    aiProvider: 'mock',
+    openAIApiKey: '',
+    colorTheme: DEFAULT_COLOR_THEME,
+    feedbackColorScheme: DEFAULT_FEEDBACK_COLOR_SCHEME,
+  });
+  const savedAppearanceRef = useRef<AppearanceSettings>({
+    colorTheme: DEFAULT_COLOR_THEME,
+    feedbackColorScheme: DEFAULT_FEEDBACK_COLOR_SCHEME,
+  });
   const [statusMessage, setStatusMessage] = useState('');
 
   useEffect(() => {
@@ -22,9 +47,22 @@ export default function SettingsPage() {
 
     async function loadSettings() {
       const settings = await getUserSettings();
+      const savedAppearance: AppearanceSettings = {
+        colorTheme: settings.colorTheme ?? DEFAULT_COLOR_THEME,
+        feedbackColorScheme: settings.feedbackColorScheme ?? DEFAULT_FEEDBACK_COLOR_SCHEME,
+      };
+      const savedSettings: UserSettings = {
+        ...settings,
+        ...savedAppearance,
+      };
 
       if (isMounted) {
         setDisplayName(settings.displayName);
+        setColorTheme(savedAppearance.colorTheme);
+        setFeedbackColorScheme(savedAppearance.feedbackColorScheme);
+        savedSettingsRef.current = savedSettings;
+        savedAppearanceRef.current = savedAppearance;
+        applyAppearanceSettings(savedAppearance);
       }
     }
 
@@ -32,14 +70,47 @@ export default function SettingsPage() {
 
     return () => {
       isMounted = false;
+      applyAppearanceSettings(savedAppearanceRef.current);
     };
   }, []);
 
-  async function handleSaveSettings() {
+  async function handleSaveDisplayName() {
     const normalizedDisplayName = displayName.trim() || DEFAULT_DISPLAY_NAME;
-    await saveUserSettings({ displayName: normalizedDisplayName });
+    const nextSettings: UserSettings = {
+      ...savedSettingsRef.current,
+      displayName: normalizedDisplayName,
+    };
+
+    await saveUserSettings(nextSettings);
+    savedSettingsRef.current = nextSettings;
     setDisplayName(normalizedDisplayName);
-    setStatusMessage('設定已儲存。');
+    setStatusMessage('\u986f\u793a\u540d\u7a31\u5df2\u5132\u5b58');
+  }
+
+  async function handleSaveAppearance() {
+    const nextAppearance: AppearanceSettings = { colorTheme, feedbackColorScheme };
+    const nextSettings: UserSettings = {
+      ...savedSettingsRef.current,
+      ...nextAppearance,
+    };
+
+    await saveUserSettings(nextSettings);
+    savedSettingsRef.current = nextSettings;
+    savedAppearanceRef.current = nextAppearance;
+    applyAppearanceSettings(nextAppearance);
+    setStatusMessage('\u5916\u89c0\u8a2d\u5b9a\u5df2\u5132\u5b58');
+  }
+
+  function handleResetAppearance() {
+    const defaultAppearance: AppearanceSettings = {
+      colorTheme: DEFAULT_COLOR_THEME,
+      feedbackColorScheme: DEFAULT_FEEDBACK_COLOR_SCHEME,
+    };
+
+    setColorTheme(defaultAppearance.colorTheme);
+    setFeedbackColorScheme(defaultAppearance.feedbackColorScheme);
+    applyAppearanceSettings(defaultAppearance);
+    setStatusMessage('');
   }
 
   async function handleResetLearningProgress() {
@@ -63,7 +134,7 @@ export default function SettingsPage() {
 
       <section className="today-card">
         <label className="form-field">
-          <span>顯示名稱</span>
+          <span className="settings-display-name-label">{'\u986f\u793a\u540d\u7a31'}</span>
           <input
             type="text"
             value={displayName}
@@ -74,11 +145,30 @@ export default function SettingsPage() {
             placeholder={DEFAULT_DISPLAY_NAME}
           />
         </label>
-        <button className="primary-button" type="button" onClick={handleSaveSettings}>
-          儲存
+        <button className="primary-button" type="button" onClick={handleSaveDisplayName}>
+          {'\u5132\u5b58\u986f\u793a\u540d\u7a31'}
         </button>
         {statusMessage ? <p>{statusMessage}</p> : null}
       </section>
+
+      <AppearanceThemeCard
+        colorTheme={colorTheme}
+        feedbackColorScheme={feedbackColorScheme}
+        isOpen={isAppearanceOpen}
+        onReset={handleResetAppearance}
+        onSave={handleSaveAppearance}
+        onSelectColorTheme={(nextTheme) => {
+          setColorTheme(nextTheme);
+          applyAppearanceSettings({ colorTheme: nextTheme, feedbackColorScheme });
+          setStatusMessage('');
+        }}
+        onSelectFeedbackColorScheme={(nextScheme) => {
+          setFeedbackColorScheme(nextScheme);
+          applyAppearanceSettings({ colorTheme, feedbackColorScheme: nextScheme });
+          setStatusMessage('');
+        }}
+        onToggle={() => setIsAppearanceOpen((current) => !current)}
+      />
 
       <section className="today-card">
         <h2>初始化學習進度</h2>
@@ -98,6 +188,110 @@ export default function SettingsPage() {
         </p>
         <p>本系統以本機瀏覽器資料儲存為主，支援離線學習與題庫管理。</p>
       </footer>
+    </section>
+  );
+}
+
+export function AppearanceThemeCard({
+  colorTheme,
+  feedbackColorScheme,
+  isOpen,
+  onReset,
+  onSave,
+  onSelectColorTheme,
+  onSelectFeedbackColorScheme,
+  onToggle,
+}: {
+  colorTheme: ColorTheme;
+  feedbackColorScheme: FeedbackColorScheme;
+  isOpen: boolean;
+  onReset: () => void;
+  onSave: () => void;
+  onSelectColorTheme: (value: ColorTheme) => void;
+  onSelectFeedbackColorScheme: (value: FeedbackColorScheme) => void;
+  onToggle: () => void;
+}) {
+  return (
+    <section className="today-card appearance-theme-card">
+      <button
+        className="appearance-theme-card__summary"
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls="appearance-theme-panel"
+        onClick={onToggle}
+      >
+        <span className="disclosure-icon" aria-hidden="true">
+          {isOpen ? '\u25BC' : '\u25B6'}
+        </span>
+        <span>{'\u5916\u89c0\u4e3b\u984c'}</span>
+      </button>
+
+      {isOpen ? (
+        <div id="appearance-theme-panel" className="appearance-theme-card__content">
+          <p className="settings-hint">
+            {'\u9078\u64c7\u9069\u5408\u4f60\u7684 JLS \u914d\u8272\u3002\u6b64\u8a2d\u5b9a\u53ea\u5f71\u97ff\u986f\u793a\uff0c\u4e0d\u6703\u6539\u8b8a\u984c\u5eab\u3001\u4f5c\u7b54\u7d00\u9304\u6216\u5b78\u7fd2\u9032\u5ea6\u3002'}
+          </p>
+
+          <section className="appearance-theme-group" aria-labelledby="appearance-color-theme-heading">
+            <h2 id="appearance-color-theme-heading">{'\u5916\u89c0\u4e3b\u984c'}</h2>
+            <div className="appearance-option-grid">
+              {COLOR_THEME_OPTIONS.map((option) => (
+                <button
+                  className="appearance-option"
+                  type="button"
+                  key={option.value}
+                  aria-pressed={colorTheme === option.value}
+                  onClick={() => onSelectColorTheme(option.value)}
+                >
+                  <span className="appearance-option__name">
+                    {option.label}
+                    {colorTheme === option.value ? <span className="appearance-option__selected">{'\u2713 \u5df2\u9078\u53d6'}</span> : null}
+                  </span>
+                  <span className="appearance-option__swatches" aria-hidden="true">
+                    {option.swatches.map((swatch) => (
+                      <span key={swatch} style={{ backgroundColor: swatch }} />
+                    ))}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="appearance-theme-group" aria-labelledby="appearance-feedback-heading">
+            <h2 id="appearance-feedback-heading">{'\u56de\u994b\u8272'}</h2>
+            <div className="appearance-option-grid appearance-option-grid--compact">
+              {FEEDBACK_COLOR_SCHEME_OPTIONS.map((option) => (
+                <button
+                  className="appearance-option"
+                  type="button"
+                  key={option.value}
+                  aria-pressed={feedbackColorScheme === option.value}
+                  onClick={() => onSelectFeedbackColorScheme(option.value)}
+                >
+                  <span className="appearance-option__name">
+                    {option.label}
+                    {feedbackColorScheme === option.value ? <span className="appearance-option__selected">{'\u2713 \u5df2\u9078\u53d6'}</span> : null}
+                  </span>
+                  <span className="appearance-option__swatches" aria-hidden="true">
+                    {option.swatches.map((swatch) => (
+                      <span key={swatch} style={{ backgroundColor: swatch }} />
+                    ))}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <div className="appearance-theme-card__actions">
+            <button className="secondary-button" type="button" onClick={onReset}>
+              {'\u6062\u5fa9\u9810\u8a2d\u5916\u89c0'}
+            </button>
+            <button className="primary-button" type="button" onClick={onSave}>
+              {'\u5132\u5b58\u5916\u89c0\u8a2d\u5b9a'}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

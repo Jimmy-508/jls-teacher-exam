@@ -1,3 +1,4 @@
+import { normalizeAppearanceSettings } from './appearanceService';
 import { load, save } from './storageService';
 import type { UserSettings } from '../types/UserSettings';
 
@@ -7,19 +8,27 @@ export const DEFAULT_DISPLAY_NAME = 'Jarvis';
 export async function getUserSettings(): Promise<UserSettings> {
   const settings = await load<UserSettings>(USER_SETTINGS_STORAGE_KEY);
 
+  const appearanceSettings = normalizeAppearanceSettings(settings ?? undefined);
+
   return {
     ...settings,
     displayName: normalizeDisplayName(settings?.displayName),
     aiProvider: settings?.aiProvider ?? 'mock',
     openAIApiKey: settings?.openAIApiKey?.trim() ?? '',
+    colorTheme: appearanceSettings.colorTheme,
+    feedbackColorScheme: appearanceSettings.feedbackColorScheme,
   };
 }
 
 export async function saveUserSettings(settings: UserSettings): Promise<void> {
+  const appearanceSettings = normalizeAppearanceSettings(settings ?? undefined);
+
   await save<UserSettings>(USER_SETTINGS_STORAGE_KEY, {
     displayName: normalizeDisplayName(settings.displayName),
     aiProvider: settings.aiProvider ?? 'mock',
     openAIApiKey: settings.openAIApiKey?.trim() ?? '',
+    colorTheme: appearanceSettings.colorTheme,
+    feedbackColorScheme: appearanceSettings.feedbackColorScheme,
   });
 }
 
