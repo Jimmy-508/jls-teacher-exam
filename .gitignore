@@ -19,3 +19,11 @@ JLS_094_115_v4.2.1*.csv
 
 icon-source.png
 .temp-icon-backup/
+
+# Default question bank update inputs and backups
+預設題庫更新/*.zip
+預設題庫更新/*.csv
+預設題庫更新/已完成/
+!預設題庫更新/.gitkeep
+question-bank-backups/*.zip
+!question-bank-backups/.gitkeep
