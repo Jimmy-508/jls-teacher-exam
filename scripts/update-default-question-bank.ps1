@@ -27,8 +27,8 @@ function Write-Section([string]$Message) { Write-Host ''; Write-Host '==========
 function Invoke-Git([string[]]$Arguments) { $output = & git @Arguments 2>&1; if ($LASTEXITCODE -ne 0) { throw "git $($Arguments -join ' ') failed:`n$output" }; return $output }
 function Get-FileSha256([string]$Path) { return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 function Test-AllowedStatusPath([string]$Path) { $n = $Path -replace '\\','/'; return ($n -like "$UpdateDirName/*" -or $n -like 'question-bank-backups/*') }
-function Assert-CleanWorktreeExceptAllowedInputs { $lines = @(& git status --porcelain=v1); if ($LASTEXITCODE -ne 0) { throw 'git status failed.' }; $blocked = @(); foreach ($line in $lines) { if ([string]::IsNullOrWhiteSpace($line)) { continue }; $status = $line.Substring(0,2); $path = $line.Substring(3).Trim().Trim('"'); if (-not (Test-AllowedStatusPath $path)) { $blocked += $line; continue }; if ($status[0] -ne '?' -and $status[0] -ne ' ') { $blocked += $line } }; if ($blocked.Count -gt 0) { Write-Host 'Uncommitted changes outside update/backups folders were found:'; $blocked | ForEach-Object { Write-Host $_ }; throw 'Please handle those changes first.' } }
-function Get-QuestionBankSourceCandidate { if (-not (Test-Path -LiteralPath $UpdateDir)) { New-Item -ItemType Directory -Force -Path $UpdateDir | Out-Null }; $files = Get-ChildItem -LiteralPath $UpdateDir -File -Force | Where-Object { -not $_.Attributes.HasFlag([System.IO.FileAttributes]::Hidden) -and $_.Name -ne '.gitkeep' -and -not $_.Name.StartsWith('~') -and ($_.Extension -ieq '.zip' -or $_.Extension -ieq '.csv') }; if ($files.Count -eq 0) { throw 'No update source found. Put exactly one ZIP or CSV file in the update folder.' }; if ($files.Count -gt 1) { Write-Host 'More than one candidate file found. Remove extra ZIP/CSV files and run again.'; $files | ForEach-Object { Write-Host "- $($_.FullName)" }; throw 'Multiple source files found.' }; return $files[0] }
+function Assert-CleanWorktreeExceptAllowedInputs { $lines = @(& git status --porcelain=v1); if ($LASTEXITCODE -ne 0) { throw 'git status failed.' }; $blocked = @(); foreach ($line in $lines) { if ([string]::IsNullOrWhiteSpace($line)) { continue }; $status = $line.Substring(0,2); $path = $line.Substring(3).Trim().Trim('"'); if (-not (Test-AllowedStatusPath $path)) { $blocked += $line; continue }; if ($status[0] -ne '?' -and $status[0] -ne ' ') { $blocked += $line } }; if (@($blocked).Count -gt 0) { Write-Host 'Uncommitted changes outside update/backups folders were found:'; $blocked | ForEach-Object { Write-Host $_ }; throw 'Please handle those changes first.' } }
+function Get-QuestionBankSourceCandidate { if (-not (Test-Path -LiteralPath $UpdateDir)) { New-Item -ItemType Directory -Force -Path $UpdateDir | Out-Null }; $files = @(Get-ChildItem -LiteralPath $UpdateDir -File -Force | Where-Object { -not $_.Attributes.HasFlag([System.IO.FileAttributes]::Hidden) -and $_.Name -ne '.gitkeep' -and -not $_.Name.StartsWith('~') -and ($_.Extension -ieq '.zip' -or $_.Extension -ieq '.csv') }); $fileCount = @($files).Count; if ($fileCount -eq 0) { throw 'No update source found. Put exactly one ZIP or CSV file in the update folder.' }; if ($fileCount -gt 1) { Write-Host 'More than one candidate file found. Remove extra ZIP/CSV files and run again.'; @($files) | ForEach-Object { Write-Host "- $($_.FullName)" }; throw 'Multiple source files found.' }; return @($files)[0] }
 function Invoke-QuestionBankValidation([string]$Path, [string]$Kind, [switch]$RejectCsvImageReferences) { $args = @('-NoProfile','-ExecutionPolicy','Bypass','-File',$ValidateScript,'-Path',$Path,'-Kind',$Kind,'-OutputJson'); if ($RejectCsvImageReferences) { $args += '-RejectCsvImageReferences' }; $json = & powershell @args; if ($LASTEXITCODE -ne 0) { throw "Question bank validation failed:`n$json" }; return ($json | ConvertFrom-Json) }
 function Restore-OriginalQuestionBankIfNeeded { if (-not $TargetWasReplaced -or $CommitCreated) { return }; if ($HadOriginalTarget) { if ($null -eq $BackupPath -or -not (Test-Path -LiteralPath $BackupPath)) { Write-Host 'Warning: backup not found, cannot restore.'; return }; Copy-Item -LiteralPath $BackupPath -Destination $TargetPath -Force; $h = Get-FileSha256 $TargetPath; if ($h -eq $BackupHash) { Write-Host "Restored target: $TargetPath" } else { Write-Host 'Warning: restored hash does not match backup.' } } else { if (Test-Path -LiteralPath $TargetPath) { Remove-Item -LiteralPath $TargetPath -Force }; Write-Host 'Removed newly-created target because no old target existed.' } }
 function UnstageTargetIfNeeded { $staged = @(& git diff --cached --name-only); if ($LASTEXITCODE -eq 0 -and ($staged -contains 'public/JLS_094_115_v5.0.zip')) { & git restore --staged -- 'public/JLS_094_115_v5.0.zip' | Out-Null } }
@@ -72,8 +72,8 @@ function Invoke-VitestSnapshot([string]$Label) {
     Label = $Label
     ExitCode = $exitCode
     TotalTests = [int]$json.numTotalTests
-    FailedFileCount = [int]$failedFiles.Count
-    FailedTestCount = [int]$failedTests.Count
+    FailedFileCount = [int]@($failedFiles).Count
+    FailedTestCount = [int]@($failedTests).Count
     FailedTests = @($failedTests)
     LogPath = $logPath
     JsonPath = $jsonPath
@@ -93,7 +93,7 @@ function Compare-VitestSnapshots([object]$Before, [object]$After) {
   }
   if ($After.FailedFileCount -gt $Before.FailedFileCount) { throw "Vitest failed file count increased from $($Before.FailedFileCount) to $($After.FailedFileCount)." }
   if ($After.FailedTestCount -gt $Before.FailedTestCount) { throw "Vitest failed test count increased from $($Before.FailedTestCount) to $($After.FailedTestCount)." }
-  if ($newFailures.Count -gt 0) {
+  if (@($newFailures).Count -gt 0) {
     Write-Host 'New Vitest failures:'
     $newFailures | ForEach-Object { Write-Host "- $($_.File) :: $($_.Name)" }
     throw 'New Vitest failures were introduced by the question bank update.'
@@ -159,7 +159,7 @@ if ($LASTEXITCODE -ne 0) { throw "pnpm build failed: $LASTEXITCODE" }
 Write-Section 'Creating Git commit'
 Invoke-Git @('add','--','public\JLS_094_115_v5.0.zip') | Out-Null
 $staged = @(Invoke-Git @('diff','--cached','--name-only') | ForEach-Object { $_ -replace '\\','/' })
-if ($staged.Count -ne 1 -or $staged[0] -ne 'public/JLS_094_115_v5.0.zip') { $staged | ForEach-Object { Write-Host "- $_" }; throw 'Staged content check failed.' }
+if (@($staged).Count -ne 1 -or @($staged)[0] -ne 'public/JLS_094_115_v5.0.zip') { $staged | ForEach-Object { Write-Host "- $_" }; throw 'Staged content check failed.' }
 Invoke-Git @('commit','-m',$CommitMessage) | Out-Null
 $CommitCreated = $true
 $CommitHash = (Invoke-Git @('rev-parse','--short','HEAD') | Select-Object -First 1).Trim()
