@@ -19,7 +19,7 @@ export default function ReferenceAnswerPanel({ questionId, referenceAnswer }: Re
   return (
     <details className="reference-answer-panel" open={isOpen} onToggle={(event) => setIsOpen(event.currentTarget.open)}>
       <summary>參考答案</summary>
-      <p>{referenceAnswer}</p>
+      <p className="preserve-line-breaks">{referenceAnswer}</p>
     </details>
   );
 }

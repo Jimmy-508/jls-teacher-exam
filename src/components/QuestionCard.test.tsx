@@ -111,11 +111,24 @@ describe('QuestionCard', () => {
     expect(html).toContain('src="/images/d.png"');
   });
 
+  it('marks stem, option text, and image note content to preserve line breaks', () => {
+    const html = renderQuestionCard({}, undefined, {
+      stem: 'stem line 1\nstem line 2',
+      optionA: 'option line 1\noption line 2',
+      imageNote: 'note line 1\nnote line 2',
+    });
+
+    expect(html).toContain('class="question-stem preserve-line-breaks"');
+    expect(html).toContain('class="choice-button__text preserve-line-breaks"');
+    expect(html).toContain('class="question-image-note preserve-line-breaks"');
+    expect(html).not.toContain('class="choice-button preserve-line-breaks"');
+  });
+
   it('renders image note only when provided', () => {
     const htmlWithNote = renderQuestionCard({}, undefined, { imageNote: 'Image note text' });
     const htmlWithoutNote = renderQuestionCard({});
 
-    expect(htmlWithNote).toContain('class="question-image-note"');
+    expect(htmlWithNote).toContain('class="question-image-note preserve-line-breaks"');
     expect(htmlWithNote).toContain('Image note text');
     expect(htmlWithoutNote).not.toContain('question-image-note');
   });

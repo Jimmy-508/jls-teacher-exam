@@ -502,6 +502,30 @@ export function wrapMixedText({
   hangingLineX,
   measureRun,
 }: WrapMixedTextOptions): WrappedLine[] {
+  return normalizePdfLineBreaks(cleanPdfText(text)).split('\n').flatMap((sourceLine, index) => {
+    const lineFirstX = index === 0 ? firstLineX : hangingLineX;
+
+    if (sourceLine.length === 0) {
+      return [{ runs: [{ text: ' ', script: 'latin' }], x: lineFirstX }];
+    }
+
+    return wrapSinglePdfTextLine({
+      text: sourceLine,
+      maxWidth,
+      firstLineX: lineFirstX,
+      hangingLineX,
+      measureRun,
+    });
+  });
+}
+
+function wrapSinglePdfTextLine({
+  text,
+  maxWidth,
+  firstLineX,
+  hangingLineX,
+  measureRun,
+}: WrapMixedTextOptions): WrappedLine[] {
   const tokens = tokenizeTextRuns(splitTextByScript(text));
   const lines: WrappedLine[] = [];
   let currentRuns: TextRun[] = [];
@@ -1513,13 +1537,18 @@ function fallbackText(value: string | undefined): string {
   return value?.trim() || '未提供';
 }
 
+function normalizePdfLineBreaks(value: string): string {
+  return value.replace(/\r\n?/g, '\n');
+}
+
 function cleanPdfText(value: string): string {
-  return value
+  return normalizePdfLineBreaks(value)
     .normalize('NFKC')
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
     .replace(/[\u200b-\u200f\u202a-\u202e\u2060\ufeff]/g, '')
     .replace(/\u00ad/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
     .trimEnd();
 }
 

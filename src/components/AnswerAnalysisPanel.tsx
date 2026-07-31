@@ -29,14 +29,14 @@ function OfflineAnswerAnalysisPanel({ analysis }: AnswerAnalysisPanelProps) {
         <div>
           <h2 id="answer-analysis-title">{ANSWER_ANALYSIS_UI_TERMS.title}</h2>
           <span className="provider-status">離線參考答案模式</span>
-          <p className="provider-note">{analysis.summary}</p>
+          <p className="provider-note preserve-line-breaks">{analysis.summary}</p>
         </div>
       </header>
 
       {analysis.referenceAnswer ? (
         <section>
           <h3>非選參考答案</h3>
-          <p>{analysis.referenceAnswer}</p>
+          <p className="preserve-line-breaks">{analysis.referenceAnswer}</p>
         </section>
       ) : null}
 
@@ -66,7 +66,7 @@ function LegacyAnswerAnalysisPanel({ analysis }: AnswerAnalysisPanelProps) {
         <div>
           <h2 id="answer-analysis-title">{ANSWER_ANALYSIS_UI_TERMS.title}</h2>
           <span className="provider-status">智慧題庫</span>
-          {analysis.summary ? <p className="provider-note">{analysis.summary}</p> : null}
+          {analysis.summary ? <p className="provider-note preserve-line-breaks">{analysis.summary}</p> : null}
         </div>
         {analysis.maxScore > 0 ? (
           <div className="answer-analysis-score" aria-label="分數">
@@ -110,7 +110,7 @@ function LegacyAnswerAnalysisPanel({ analysis }: AnswerAnalysisPanelProps) {
               ? ANSWER_ANALYSIS_UI_TERMS.collapseReferenceAnswer
               : ANSWER_ANALYSIS_UI_TERMS.viewReferenceAnswer}
           </summary>
-          <p>{analysis.referenceAnswer}</p>
+          <p className="preserve-line-breaks">{analysis.referenceAnswer}</p>
         </details>
       ) : null}
     </section>
@@ -135,7 +135,7 @@ function CompactList({
       {items.slice(0, 8).map((item) => (
         <li key={item}>
           <span aria-hidden="true">{marker}</span>
-          {item}
+          <span className="preserve-line-breaks">{item}</span>
         </li>
       ))}
     </ul>

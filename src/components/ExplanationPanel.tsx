@@ -32,7 +32,7 @@ export default function ExplanationPanel({ explanation }: ExplanationPanelProps)
       {explanation.questionKeyPoint.trim().length > 0 ? (
         <section>
           <h3>題幹分析</h3>
-          <p>{explanation.questionKeyPoint}</p>
+          <p className="preserve-line-breaks">{explanation.questionKeyPoint}</p>
         </section>
       ) : null}
 
@@ -41,7 +41,7 @@ export default function ExplanationPanel({ explanation }: ExplanationPanelProps)
           <h3>選項解析</h3>
           <div className="option-analysis">
             {optionAnalyses.map((analysis) => (
-              <p key={analysis}>{analysis}</p>
+              <p className="compact-inline-text" key={analysis}>{analysis}</p>
             ))}
           </div>
         </section>
@@ -50,14 +50,14 @@ export default function ExplanationPanel({ explanation }: ExplanationPanelProps)
       {explanation.solvingTechnique?.trim() ? (
         <section>
           <h3>解題技巧</h3>
-          <p>{explanation.solvingTechnique}</p>
+          <p className="preserve-line-breaks">{explanation.solvingTechnique}</p>
         </section>
       ) : null}
 
       {explanation.confusingConcepts?.trim() ? (
         <section>
           <h3>易混淆概念</h3>
-          <p>{explanation.confusingConcepts}</p>
+          <p className="preserve-line-breaks">{explanation.confusingConcepts}</p>
         </section>
       ) : null}
     </section>

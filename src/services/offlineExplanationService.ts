@@ -26,7 +26,8 @@ export function buildOfflineChoiceExplanation(question: Question, userAnswer: Ch
 }
 
 function formatOptionAnalysis(choice: ChoiceKey, analysis: string | undefined): string {
-  return analysis ? `${choice} 選項\n${analysis}` : '';
+  const compactAnalysis = analysis?.trim().replace(/\s+/g, ' ') ?? '';
+  return compactAnalysis ? `(${choice}) ${'\u9078\u9805'}${compactAnalysis}` : '';
 }
 
 function isPresent(value: string | undefined): value is string {

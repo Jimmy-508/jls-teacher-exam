@@ -278,6 +278,16 @@ p {
   line-height: 1.55;
 }
 
+.preserve-line-breaks {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.compact-inline-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .choice-list {
   display: grid;
   gap: 12px;

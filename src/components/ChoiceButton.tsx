@@ -36,7 +36,7 @@ export default function ChoiceButton({
     <button className={stateClass} type="button" disabled={disabled} onClick={() => onSelect(choiceKey)}>
       <span className="choice-button__key">{choiceKey}</span>
       <span className="choice-button__body">
-        <span className="choice-button__text">{text}</span>
+        <span className="choice-button__text preserve-line-breaks">{text}</span>
         {imageSrc ? <QuestionImage className="question-image choice-button__image" src={imageSrc} alt={imageAlt} /> : null}
       </span>
     </button>

@@ -12,7 +12,7 @@ export default function SmartFeedbackPanel({ result }: SmartFeedbackPanelProps) 
         <div>
           <h2 id="smart-feedback-title">作答回饋參考</h2>
           <strong>{toStars(result.level)}</strong>
-          <p>{result.summary}</p>
+          <p className="preserve-line-breaks">{result.summary}</p>
         </div>
       </header>
 
@@ -23,7 +23,7 @@ export default function SmartFeedbackPanel({ result }: SmartFeedbackPanelProps) 
             {result.coveredConcepts.map((evidence) => (
               <li key={evidence.concept}>
                 <span aria-hidden="true">✓</span>
-                {evidence.concept}
+                <span className="preserve-line-breaks">{evidence.concept}</span>
               </li>
             ))}
           </ul>
@@ -37,7 +37,7 @@ export default function SmartFeedbackPanel({ result }: SmartFeedbackPanelProps) 
             {result.missingConcepts.map((concept) => (
               <li key={concept}>
                 <span aria-hidden="true">□</span>
-                {concept}
+                <span className="preserve-line-breaks">{concept}</span>
               </li>
             ))}
           </ul>
@@ -49,7 +49,7 @@ export default function SmartFeedbackPanel({ result }: SmartFeedbackPanelProps) 
           <h3>已寫到的加分概念：</h3>
           <ul className="smart-feedback-concept-list">
             {result.matchedBonusConcepts.map((concept) => (
-              <li key={concept}>{concept}</li>
+              <li key={concept}><span className="preserve-line-breaks">{concept}</span></li>
             ))}
           </ul>
         </section>
@@ -61,7 +61,7 @@ export default function SmartFeedbackPanel({ result }: SmartFeedbackPanelProps) 
           <p className="smart-feedback-note">加入這些內容，可讓答案更完整。</p>
           <ul className="smart-feedback-concept-list">
             {result.suggestedBonusConcepts.map((concept) => (
-              <li key={concept}>{concept}</li>
+              <li key={concept}><span className="preserve-line-breaks">{concept}</span></li>
             ))}
           </ul>
         </section>

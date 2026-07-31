@@ -12,6 +12,7 @@ import {
   getWrongQuestionDateFilterError,
   normalizeChoiceAnswer,
   sortWrongQuestionExportItems,
+  wrapMixedText,
 } from './wrongQuestionExportService';
 import type { LearningRecord } from '../types/LearningRecord';
 import type { Question } from '../types/question';
@@ -172,6 +173,56 @@ describe('wrongQuestionExportService', () => {
     ]);
 
     expect(sortedItems.map((item) => item.question.id)).toEqual(['qLang', 'q2', 'q10', 'qOld']);
+  });
+
+  it('preserves explicit PDF text line breaks while still wrapping each source line', () => {
+    const lines = wrapMixedText({
+      text: 'Alpha\nBeta\r\n\r\nLongToken',
+      maxWidth: 58,
+      firstLineX: 10,
+      hangingLineX: 40,
+      measureRun: (run) => run.text.length * 4,
+    });
+
+    const renderedLines = lines.map((line) => line.runs.map((run) => run.text).join(''));
+
+    expect(renderedLines).toEqual(['Alpha', 'Beta', ' ', 'Long', 'Toke', 'n']);
+    expect(lines[0].x).toBe(10);
+    expect(lines[1].x).toBe(40);
+    expect(lines[3].x).toBe(40);
+    expect(lines[5].x).toBe(40);
+  });
+
+  it('renders multiline stems and options without collapsing source line breaks', async () => {
+    const contexts = installCanvasMock();
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{
+        question: createQuestion({
+          stem: 'StemLineOne\nStemLineTwo',
+          optionA: 'AlphaOne\nAlphaTwo',
+          optionB: 'BetaOne\r\nBetaTwo',
+          optionC: 'SingleLineOption',
+          optionD: '',
+        }),
+        wrongCount: 1,
+      }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const calls = contexts.flatMap((context) => context.fillText.mock.calls);
+    const renderedText = calls.map((call) => String(call[0]));
+    const stemFirst = calls.find((call) => String(call[0]).includes('StemLineOne'));
+    const stemSecond = calls.find((call) => String(call[0]) === 'StemLineTwo');
+    const optionFirst = calls.find((call) => String(call[0]).includes('(A) AlphaOne'));
+    const optionSecond = calls.find((call) => String(call[0]) === 'AlphaTwo');
+    const optionBSecond = calls.find((call) => String(call[0]) === 'BetaTwo');
+
+    expect(stemSecond?.[2]).toBeGreaterThan(stemFirst?.[2] ?? 0);
+    expect(optionSecond?.[2]).toBeGreaterThan(optionFirst?.[2] ?? 0);
+    expect(optionBSecond?.[2]).toBeGreaterThan(optionSecond?.[2] ?? 0);
+    expect(optionSecond?.[1]).toBeGreaterThan(optionFirst?.[1] ?? 0);
   });
 
   it('renders PDF metadata with forced analysis page, compact title date, and answer hanging indent', async () => {

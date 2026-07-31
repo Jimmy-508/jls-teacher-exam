@@ -1286,12 +1286,12 @@ export function EssayPracticeCard({
         <span>第 {question.questionNumber} 題</span>
       </div>
 
-      <h1 className="question-stem">{question.stem}</h1>
+      <h1 className="question-stem preserve-line-breaks">{question.stem}</h1>
       {typeof question.stemImage === 'string' && question.stemImage.trim().length > 0 ? (
         <QuestionImage className="question-image question-stem-image" src={question.stemImage} alt="Question image" />
       ) : null}
       {typeof question.imageNote === 'string' && question.imageNote.trim().length > 0 ? (
-        <p className="question-image-note">{question.imageNote}</p>
+        <p className="question-image-note preserve-line-breaks">{question.imageNote}</p>
       ) : null}
       <p className="essay-score">配分：{question.score || 0}</p>
 
