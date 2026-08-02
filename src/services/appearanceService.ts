@@ -1,4 +1,12 @@
-export type ColorTheme = 'classic-green' | 'starry-blue' | 'tech-purple' | 'warm-sand' | 'sakura-pink' | 'graphite';
+export type ColorTheme =
+  | 'classic-green'
+  | 'starry-blue'
+  | 'tech-purple'
+  | 'warm-sand'
+  | 'sakura-pink'
+  | 'graphite'
+  | 'rainbow-candy'
+  | 'aurora';
 export type FeedbackColorScheme = 'standard' | 'colorblind-blue-orange';
 
 export const DEFAULT_COLOR_THEME: ColorTheme = 'classic-green';
@@ -20,6 +28,12 @@ export const COLOR_THEME_OPTIONS: Array<{
   { value: 'warm-sand', label: '\u6696\u6c99\u91d1', swatches: ['#8a6f3d', '#6f562d', '#f7efd9', '#fbf7ef'] },
   { value: 'sakura-pink', label: '\u6afb\u82b1\u7c89', swatches: ['#a85c73', '#85475c', '#f8e9ef', '#fbf6f8'] },
   { value: 'graphite', label: '\u77f3\u58a8\u7070', swatches: ['#3f4852', '#2f3740', '#edf0f2', '#f6f7f8'] },
+  {
+    value: 'rainbow-candy',
+    label: '\u5f69\u8679\u7cd6',
+    swatches: ['#FF5A67', '#FFAE42', '#43C978', '#55A7FF'],
+  },
+  { value: 'aurora', label: '\u5317\u6975\u5149', swatches: ['#43D6C6', '#42B9E8', '#5D9CFA', '#9B7BF5'] },
 ];
 
 export const FEEDBACK_COLOR_SCHEME_OPTIONS: Array<{

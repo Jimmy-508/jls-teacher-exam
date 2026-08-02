@@ -192,6 +192,10 @@ export default function SettingsPage() {
   );
 }
 
+function getThemePreviewSwatches(option: (typeof COLOR_THEME_OPTIONS)[number]): string[] {
+  return option.value === 'rainbow-candy' ? ['#FF5A67', '#FFAE42', '#43C978', '#55A7FF'] : option.swatches;
+}
+
 export function AppearanceThemeCard({
   colorTheme,
   feedbackColorScheme,
@@ -235,50 +239,62 @@ export function AppearanceThemeCard({
           <section className="appearance-theme-group" aria-labelledby="appearance-color-theme-heading">
             <h2 id="appearance-color-theme-heading">{'\u5916\u89c0\u4e3b\u984c'}</h2>
             <div className="appearance-option-grid">
-              {COLOR_THEME_OPTIONS.map((option) => (
-                <button
-                  className="appearance-option"
-                  type="button"
-                  key={option.value}
-                  aria-pressed={colorTheme === option.value}
-                  onClick={() => onSelectColorTheme(option.value)}
-                >
-                  <span className="appearance-option__name">
-                    {option.label}
-                    {colorTheme === option.value ? <span className="appearance-option__selected">{'\u2713 \u5df2\u9078\u53d6'}</span> : null}
-                  </span>
-                  <span className="appearance-option__swatches" aria-hidden="true">
-                    {option.swatches.map((swatch) => (
-                      <span key={swatch} style={{ backgroundColor: swatch }} />
-                    ))}
-                  </span>
-                </button>
-              ))}
+              {COLOR_THEME_OPTIONS.map((option) => {
+                const isSelected = colorTheme === option.value;
+
+                return (
+                  <button
+                    className="appearance-option"
+                    type="button"
+                    key={option.value}
+                    aria-pressed={isSelected}
+                    onClick={() => onSelectColorTheme(option.value)}
+                  >
+                    <span className="appearance-option__name">
+                      {option.label}
+                      <span className="appearance-option__selected" aria-hidden={!isSelected}>
+                        {'\u2713 \u5df2\u9078\u53d6'}
+                      </span>
+                    </span>
+                    <span className="appearance-option__swatches" aria-hidden="true">
+                      {getThemePreviewSwatches(option).map((swatch) => (
+                        <span key={swatch} style={{ backgroundColor: swatch }} />
+                      ))}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
 
           <section className="appearance-theme-group" aria-labelledby="appearance-feedback-heading">
             <h2 id="appearance-feedback-heading">{'\u56de\u994b\u8272'}</h2>
             <div className="appearance-option-grid appearance-option-grid--compact">
-              {FEEDBACK_COLOR_SCHEME_OPTIONS.map((option) => (
-                <button
-                  className="appearance-option"
-                  type="button"
-                  key={option.value}
-                  aria-pressed={feedbackColorScheme === option.value}
-                  onClick={() => onSelectFeedbackColorScheme(option.value)}
-                >
-                  <span className="appearance-option__name">
-                    {option.label}
-                    {feedbackColorScheme === option.value ? <span className="appearance-option__selected">{'\u2713 \u5df2\u9078\u53d6'}</span> : null}
-                  </span>
-                  <span className="appearance-option__swatches" aria-hidden="true">
-                    {option.swatches.map((swatch) => (
-                      <span key={swatch} style={{ backgroundColor: swatch }} />
-                    ))}
-                  </span>
-                </button>
-              ))}
+              {FEEDBACK_COLOR_SCHEME_OPTIONS.map((option) => {
+                const isSelected = feedbackColorScheme === option.value;
+
+                return (
+                  <button
+                    className="appearance-option"
+                    type="button"
+                    key={option.value}
+                    aria-pressed={isSelected}
+                    onClick={() => onSelectFeedbackColorScheme(option.value)}
+                  >
+                    <span className="appearance-option__name">
+                      {option.label}
+                      <span className="appearance-option__selected" aria-hidden={!isSelected}>
+                        {'\u2713 \u5df2\u9078\u53d6'}
+                      </span>
+                    </span>
+                    <span className="appearance-option__swatches" aria-hidden="true">
+                      {option.swatches.map((swatch) => (
+                        <span key={swatch} style={{ backgroundColor: swatch }} />
+                      ))}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
 

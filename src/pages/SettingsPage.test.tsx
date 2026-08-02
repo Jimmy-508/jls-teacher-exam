@@ -68,6 +68,8 @@ describe('SettingsPage', () => {
     expect(html).toContain('\u6696\u6c99\u91d1');
     expect(html).toContain('\u6afb\u82b1\u7c89');
     expect(html).toContain('\u77f3\u58a8\u7070');
+    expect(html).toContain('\u5f69\u8679\u7cd6');
+    expect(html).toContain('\u5317\u6975\u5149');
     expect(html).toContain('\u6a19\u6e96\u7d05\u7da0');
     expect(html).toContain('\u8272\u5f31\u53cb\u5584\u85cd\u6a58');
     expect(html).toContain('\u6062\u5fa9\u9810\u8a2d\u5916\u89c0');
@@ -75,12 +77,18 @@ describe('SettingsPage', () => {
     expect(html).toContain('\u5132\u5b58\u5916\u89c0\u8a2d\u5b9a');
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(2);
     expect(html).toContain('\u2713 \u5df2\u9078\u53d6');
+    expect(html).toContain('background-color:#FF5A67');
+    expect(html).toContain('background-color:#FFAE42');
+    expect(html).toContain('background-color:#43C978');
+    expect(html).toContain('background-color:#55A7FF');
+    expect(html).not.toContain('background-color:#FFE066');
+    expect(html).not.toContain('background-color:#9B6EF3');
   });
 
-  it('marks alternate appearance choices as selected', () => {
+  it('marks rainbow candy as a selected appearance choice', () => {
     const html = renderToStaticMarkup(
       <AppearanceThemeCard
-        colorTheme="warm-sand"
+        colorTheme="rainbow-candy"
         feedbackColorScheme="colorblind-blue-orange"
         isOpen={true}
         onReset={() => undefined}
@@ -91,8 +99,28 @@ describe('SettingsPage', () => {
       />,
     );
 
-    expect(html).toContain('\u6696\u6c99\u91d1');
+    expect(html).toContain('\u5f69\u8679\u7cd6');
     expect(html).toContain('\u8272\u5f31\u53cb\u5584\u85cd\u6a58');
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(2);
+    expect(html.match(/\u2713 \u5df2\u9078\u53d6/g)).toHaveLength(10);
+  });
+
+  it('marks aurora as a selected appearance choice', () => {
+    const html = renderToStaticMarkup(
+      <AppearanceThemeCard
+        colorTheme="aurora"
+        feedbackColorScheme="standard"
+        isOpen={true}
+        onReset={() => undefined}
+        onSave={() => undefined}
+        onSelectColorTheme={() => undefined}
+        onSelectFeedbackColorScheme={() => undefined}
+        onToggle={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('\u5317\u6975\u5149');
+    expect(html).toContain('\u6a19\u6e96\u7d05\u7da0');
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(2);
   });
 });

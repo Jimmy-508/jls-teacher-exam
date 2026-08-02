@@ -22,6 +22,8 @@ describe('appearanceService', () => {
 
   it('keeps valid theme and feedback choices', () => {
     expect(normalizeColorTheme('starry-blue')).toBe('starry-blue');
+    expect(normalizeColorTheme('rainbow-candy')).toBe('rainbow-candy');
+    expect(normalizeColorTheme('aurora')).toBe('aurora');
     expect(normalizeFeedbackColorScheme('colorblind-blue-orange')).toBe('colorblind-blue-orange');
   });
 
@@ -38,9 +40,19 @@ describe('appearanceService', () => {
     const dataset: Record<string, string> = {};
     vi.stubGlobal('document', { documentElement: { dataset } });
 
-    applyAppearanceSettings({ colorTheme: 'sakura-pink', feedbackColorScheme: 'colorblind-blue-orange' });
+    applyAppearanceSettings({ colorTheme: 'rainbow-candy', feedbackColorScheme: 'colorblind-blue-orange' });
 
-    expect(dataset.jlsTheme).toBe('sakura-pink');
+    expect(dataset.jlsTheme).toBe('rainbow-candy');
     expect(dataset.jlsFeedback).toBe('colorblind-blue-orange');
+  });
+
+  it('applies the aurora theme to the document element', () => {
+    const dataset: Record<string, string> = {};
+    vi.stubGlobal('document', { documentElement: { dataset } });
+
+    applyAppearanceSettings({ colorTheme: 'aurora', feedbackColorScheme: 'standard' });
+
+    expect(dataset.jlsTheme).toBe('aurora');
+    expect(dataset.jlsFeedback).toBe('standard');
   });
 });

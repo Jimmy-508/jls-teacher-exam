@@ -1801,6 +1801,10 @@ p {
   --color-primary: #1c6758;
   --color-primary-hover: #155347;
   --color-primary-soft: #eef3f1;
+  --color-primary-gradient: none;
+  --button-background: var(--color-primary);
+  --button-background-hover: var(--color-primary-hover);
+  --color-page-gradient: none;
   --color-page-background: #f5f7fa;
   --color-surface: #ffffff;
   --color-surface-soft: #f7f9f7;
@@ -1885,6 +1889,49 @@ html[data-jls-theme='graphite'] {
   --color-muted: #56616c;
 }
 
+html[data-jls-theme='rainbow-candy'] {
+  --color-primary: #E84D8A;
+  --color-primary-hover: #D93D78;
+  --color-primary-soft: #FFF0F7;
+  --color-primary-gradient: linear-gradient(90deg, #FF5A67 0%, #FFAE42 20%, #FFE066 40%, #43C978 60%, #55A7FF 80%, #9B6EF3 100%);
+  --button-background: var(--color-primary-gradient);
+  --button-background-hover: var(--color-primary-gradient);
+  --color-page-gradient:
+    radial-gradient(circle at 8% 12%, rgba(255, 90, 103, 0.12), transparent 28%),
+    radial-gradient(circle at 88% 8%, rgba(85, 167, 255, 0.12), transparent 30%),
+    radial-gradient(circle at 80% 42%, rgba(155, 110, 243, 0.09), transparent 26%),
+    radial-gradient(circle at 12% 58%, rgba(67, 201, 120, 0.08), transparent 24%);
+  --color-page-background: #FFFBFD;
+  --color-surface: #FFFFFF;
+  --color-surface-soft: #FFF7FA;
+  --color-border: #F1D6E2;
+  --color-border-strong: #E5ADC5;
+  --color-text: #302632;
+  --color-heading: #28182D;
+  --color-muted: #6D5C70;
+}
+
+html[data-jls-theme='aurora'] {
+  --color-primary: #24AFA8;
+  --color-primary-hover: #168F90;
+  --color-primary-soft: #EAFBFA;
+  --color-primary-gradient: linear-gradient(90deg, #43D6C6 0%, #42B9E8 38%, #5D9CFA 68%, #9B7BF5 100%);
+  --button-background: var(--color-primary-gradient);
+  --button-background-hover: var(--color-primary-gradient);
+  --color-page-gradient:
+    radial-gradient(circle at 10% 10%, rgba(67, 214, 198, 0.14), transparent 30%),
+    radial-gradient(circle at 88% 12%, rgba(66, 185, 232, 0.12), transparent 28%),
+    radial-gradient(circle at 82% 46%, rgba(155, 123, 245, 0.1), transparent 28%);
+  --color-page-background: #F6FBFF;
+  --color-surface: #FFFFFF;
+  --color-surface-soft: #F2FAFC;
+  --color-border: #CFE7EA;
+  --color-border-strong: #A8D5DB;
+  --color-text: #243047;
+  --color-heading: #13233F;
+  --color-muted: #58677C;
+}
+
 html[data-jls-feedback='colorblind-blue-orange'] {
   --color-correct: #2563a6;
   --color-correct-soft: #eff6ff;
@@ -1899,6 +1946,7 @@ html[data-jls-feedback='colorblind-blue-orange'] {
 
 .app-shell {
   background:
+    var(--color-page-gradient),
     linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 8%, transparent), rgba(245, 247, 250, 0) 280px),
     var(--color-page-background);
 }
@@ -1993,7 +2041,6 @@ body,
   color: var(--color-muted);
 }
 
-.primary-button,
 .brand-mark,
 .progress__fill,
 .theme-progress__track span,
@@ -2003,9 +2050,86 @@ body,
   color: #ffffff;
 }
 
-.primary-button:hover {
-  background-color: var(--color-primary-hover);
+.primary-button {
+  background: var(--button-background);
+  color: #ffffff;
 }
+
+.primary-button:hover {
+  background: var(--button-background-hover);
+}
+
+html[data-jls-theme='rainbow-candy'] .primary-button {
+  color: #321E38;
+}
+html[data-jls-theme='rainbow-candy'] .primary-button,
+html[data-jls-theme='aurora'] .primary-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+html[data-jls-theme='rainbow-candy'] .primary-button::before,
+html[data-jls-theme='aurora'] .primary-button::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  bottom: -30%;
+  left: -45%;
+  width: 32%;
+  transform: translateX(-220%) skewX(-18deg);
+  transition: transform 0.48s ease;
+  pointer-events: none;
+}
+
+html[data-jls-theme='rainbow-candy'] .primary-button::before {
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 25%,
+    rgba(255, 255, 255, 0.42) 50%,
+    rgba(255, 255, 255, 0.08) 75%,
+    transparent 100%
+  );
+}
+
+html[data-jls-theme='aurora'] .primary-button::before {
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 25%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0.08) 75%,
+    transparent 100%
+  );
+}
+
+html[data-jls-theme='rainbow-candy'] .primary-button:hover:not(:disabled)::before,
+html[data-jls-theme='aurora'] .primary-button:hover:not(:disabled)::before {
+  transform: translateX(520%) skewX(-18deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-jls-theme='rainbow-candy'] .primary-button::before,
+  html[data-jls-theme='aurora'] .primary-button::before {
+    transition: none;
+  }
+
+  html[data-jls-theme='rainbow-candy'] .primary-button:hover:not(:disabled)::before,
+  html[data-jls-theme='aurora'] .primary-button:hover:not(:disabled)::before {
+    transform: translateX(-220%) skewX(-18deg);
+  }
+}
+
+html[data-jls-theme='rainbow-candy'] .progress__fill,
+html[data-jls-theme='rainbow-candy'] .theme-progress__track span,
+html[data-jls-theme='rainbow-candy'] .familiarity-level-bar__track span,
+html[data-jls-theme='aurora'] .progress__fill,
+html[data-jls-theme='aurora'] .theme-progress__track span,
+html[data-jls-theme='aurora'] .familiarity-level-bar__track span {
+  background: var(--color-primary-gradient);
+}
+
 
 .text-link,
 .home-brand__full-name,
@@ -2162,7 +2286,12 @@ body,
 .appearance-option__selected {
   color: var(--color-primary);
   font-size: 0.78rem;
+  visibility: hidden;
   white-space: nowrap;
+}
+
+.appearance-option[aria-pressed='true'] .appearance-option__selected {
+  visibility: visible;
 }
 
 .appearance-option__swatches {
