@@ -55,6 +55,22 @@ describe('responsive styles', () => {
     expect(styles).toMatch(/html\[data-jls-theme='aurora'\] \.progress__fill/);
     expect(styles).toMatch(/\.appearance-option__selected\s*\{[^}]*visibility:\s*hidden;/s);
     expect(styles).toMatch(/\.appearance-option\[aria-pressed='true'\] \.appearance-option__selected\s*\{[^}]*visibility:\s*visible;/s);
+    expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\][\s\S]*--theme-glow-duration:\s*12s;/);
+    expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\][\s\S]*--theme-glow-scale:\s*1\.02;/);
+    expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\][\s\S]*--theme-glow-opacity-min:\s*0\.16;/);
+    expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\][\s\S]*--theme-glow-opacity-max:\s*0\.2;/);
+    expect(styles).toMatch(/html\[data-jls-theme='aurora'\][\s\S]*--theme-glow-duration:\s*15s;/);
+    expect(styles).toMatch(/html\[data-jls-theme='aurora'\][\s\S]*--theme-glow-scale:\s*1\.03;/);
+    expect(styles).toMatch(/html\[data-jls-theme='aurora'\][\s\S]*--theme-glow-opacity-min:\s*0\.12;/);
+    expect(styles).toMatch(/html\[data-jls-theme='aurora'\][\s\S]*--theme-glow-opacity-max:\s*0\.18;/);
+    expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\] \.app-shell,\s*html\[data-jls-theme='aurora'\] \.app-shell\s*\{[^}]*position:\s*relative;[^}]*overflow:\s*hidden;[^}]*isolation:\s*isolate;/s);
+    expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\] \.app-shell::before,\s*html\[data-jls-theme='aurora'\] \.app-shell::before\s*\{[^}]*animation:\s*theme-glow-breathe var\(--theme-glow-duration\) ease-in-out infinite;/s);
+    expect(styles).toMatch(/@keyframes theme-glow-breathe\s*\{[\s\S]*opacity:\s*var\(--theme-glow-opacity-min\);[\s\S]*transform:\s*scale\(1\);[\s\S]*opacity:\s*var\(--theme-glow-opacity-max\);[\s\S]*transform:\s*scale\(var\(--theme-glow-scale\)\);/);
+    expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*html\[data-jls-theme='rainbow-candy'\] \.app-shell::before,[\s\S]*html\[data-jls-theme='aurora'\] \.app-shell::before\s*\{[\s\S]*animation:\s*none;[\s\S]*opacity:\s*var\(--theme-glow-opacity-min\);[\s\S]*transform:\s*scale\(1\);/);
+    for (const theme of ['starry-blue', 'tech-purple', 'warm-sand', 'sakura-pink', 'graphite']) {
+      expect(styles).not.toContain(`html[data-jls-theme='${theme}'] .app-shell::before`);
+      expect(getCssBlock(`html[data-jls-theme='${theme}']`)).not.toMatch(/--theme-glow-|animation/);
+    }
   });
 
 

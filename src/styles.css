@@ -1896,6 +1896,10 @@ html[data-jls-theme='rainbow-candy'] {
   --color-primary-gradient: linear-gradient(90deg, #FF5A67 0%, #FFAE42 20%, #FFE066 40%, #43C978 60%, #55A7FF 80%, #9B6EF3 100%);
   --button-background: var(--color-primary-gradient);
   --button-background-hover: var(--color-primary-gradient);
+  --theme-glow-duration: 12s;
+  --theme-glow-scale: 1.02;
+  --theme-glow-opacity-min: 0.16;
+  --theme-glow-opacity-max: 0.2;
   --color-page-gradient:
     radial-gradient(circle at 8% 12%, rgba(255, 90, 103, 0.12), transparent 28%),
     radial-gradient(circle at 88% 8%, rgba(85, 167, 255, 0.12), transparent 30%),
@@ -1918,6 +1922,10 @@ html[data-jls-theme='aurora'] {
   --color-primary-gradient: linear-gradient(90deg, #43D6C6 0%, #42B9E8 38%, #5D9CFA 68%, #9B7BF5 100%);
   --button-background: var(--color-primary-gradient);
   --button-background-hover: var(--color-primary-gradient);
+  --theme-glow-duration: 15s;
+  --theme-glow-scale: 1.03;
+  --theme-glow-opacity-min: 0.12;
+  --theme-glow-opacity-max: 0.18;
   --color-page-gradient:
     radial-gradient(circle at 10% 10%, rgba(67, 214, 198, 0.14), transparent 30%),
     radial-gradient(circle at 88% 12%, rgba(66, 185, 232, 0.12), transparent 28%),
@@ -1949,6 +1957,49 @@ html[data-jls-feedback='colorblind-blue-orange'] {
     var(--color-page-gradient),
     linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 8%, transparent), rgba(245, 247, 250, 0) 280px),
     var(--color-page-background);
+}
+
+html[data-jls-theme='rainbow-candy'] .app-shell,
+html[data-jls-theme='aurora'] .app-shell {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 8%, transparent), rgba(245, 247, 250, 0) 280px),
+    var(--color-page-background);
+}
+
+html[data-jls-theme='rainbow-candy'] .app-shell::before,
+html[data-jls-theme='aurora'] .app-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--color-page-gradient);
+  opacity: var(--theme-glow-opacity-min);
+  transform: scale(1);
+  transform-origin: center;
+  animation: theme-glow-breathe var(--theme-glow-duration) ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+html[data-jls-theme='rainbow-candy'] .app-shell > *,
+html[data-jls-theme='aurora'] .app-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes theme-glow-breathe {
+  0%,
+  100% {
+    opacity: var(--theme-glow-opacity-min);
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: var(--theme-glow-opacity-max);
+    transform: scale(var(--theme-glow-scale));
+  }
 }
 
 .bottom-nav,
@@ -2110,6 +2161,13 @@ html[data-jls-theme='aurora'] .primary-button:hover:not(:disabled)::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html[data-jls-theme='rainbow-candy'] .app-shell::before,
+  html[data-jls-theme='aurora'] .app-shell::before {
+    animation: none;
+    opacity: var(--theme-glow-opacity-min);
+    transform: scale(1);
+  }
+
   html[data-jls-theme='rainbow-candy'] .primary-button::before,
   html[data-jls-theme='aurora'] .primary-button::before {
     transition: none;
