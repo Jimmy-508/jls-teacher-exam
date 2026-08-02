@@ -1896,10 +1896,10 @@ html[data-jls-theme='rainbow-candy'] {
   --color-primary-gradient: linear-gradient(90deg, #FF5A67 0%, #FFAE42 20%, #FFE066 40%, #43C978 60%, #55A7FF 80%, #9B6EF3 100%);
   --button-background: var(--color-primary-gradient);
   --button-background-hover: var(--color-primary-gradient);
-  --theme-glow-duration: 7s;
-  --theme-glow-scale: 1.09;
-  --theme-glow-opacity-min: 0.26;
-  --theme-glow-opacity-max: 0.52;
+  --theme-glow-duration: 5.5s;
+  --theme-glow-scale: 1.14;
+  --theme-glow-opacity-min: 0.28;
+  --theme-glow-opacity-max: 0.68;
   --color-page-gradient:
     radial-gradient(circle at 8% 12%, rgba(255, 90, 103, 0.12), transparent 28%),
     radial-gradient(circle at 88% 8%, rgba(85, 167, 255, 0.12), transparent 30%),
@@ -1922,10 +1922,10 @@ html[data-jls-theme='aurora'] {
   --color-primary-gradient: linear-gradient(90deg, #43D6C6 0%, #42B9E8 38%, #5D9CFA 68%, #9B7BF5 100%);
   --button-background: var(--color-primary-gradient);
   --button-background-hover: var(--color-primary-gradient);
-  --theme-glow-duration: 9s;
-  --theme-glow-scale: 1.11;
-  --theme-glow-opacity-min: 0.24;
-  --theme-glow-opacity-max: 0.48;
+  --theme-glow-duration: 7s;
+  --theme-glow-scale: 1.16;
+  --theme-glow-opacity-min: 0.26;
+  --theme-glow-opacity-max: 0.62;
   --color-page-gradient:
     radial-gradient(circle at 10% 10%, rgba(67, 214, 198, 0.14), transparent 30%),
     radial-gradient(circle at 88% 12%, rgba(66, 185, 232, 0.12), transparent 28%),
