@@ -62,11 +62,11 @@ describe('responsive styles', () => {
     expect(styles).toContain('rgba(155, 123, 245, 0.18)');
     expect(styles).toMatch(/\.appearance-option__selected\s*\{[^}]*visibility:\s*hidden;/s);
     expect(styles).toMatch(/\.appearance-option\[aria-pressed='true'\] \.appearance-option__selected\s*\{[^}]*visibility:\s*visible;/s);
-    expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\][\s\S]*--theme-glow-duration:\s*10s;/);
+    expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\][\s\S]*--theme-glow-duration:\s*14s;/);
     expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\][\s\S]*--theme-glow-scale:\s*1\.22;/);
     expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\][\s\S]*--theme-glow-opacity-min:\s*0\.22;/);
     expect(styles).toMatch(/html\[data-jls-theme='rainbow-candy'\][\s\S]*--theme-glow-opacity-max:\s*0\.92;/);
-    expect(styles).toMatch(/html\[data-jls-theme='aurora'\][\s\S]*--theme-glow-duration:\s*12s;/);
+    expect(styles).toMatch(/html\[data-jls-theme='aurora'\][\s\S]*--theme-glow-duration:\s*16s;/);
     expect(styles).toMatch(/html\[data-jls-theme='aurora'\][\s\S]*--theme-glow-scale:\s*1\.24;/);
     expect(styles).toMatch(/html\[data-jls-theme='aurora'\][\s\S]*--theme-glow-opacity-min:\s*0\.20;/);
     expect(styles).toMatch(/html\[data-jls-theme='aurora'\][\s\S]*--theme-glow-opacity-max:\s*0\.86;/);

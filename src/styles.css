@@ -1896,7 +1896,7 @@ html[data-jls-theme='rainbow-candy'] {
   --color-primary-gradient: linear-gradient(90deg, #FF5A67 0%, #FFAE42 20%, #FFE066 40%, #43C978 60%, #55A7FF 80%, #9B6EF3 100%);
   --button-background: var(--color-primary-gradient);
   --button-background-hover: var(--color-primary-gradient);
-  --theme-glow-duration: 10s;
+  --theme-glow-duration: 14s;
   --theme-glow-scale: 1.22;
   --theme-glow-opacity-min: 0.22;
   --theme-glow-opacity-max: 0.92;
@@ -1922,7 +1922,7 @@ html[data-jls-theme='aurora'] {
   --color-primary-gradient: linear-gradient(90deg, #43D6C6 0%, #42B9E8 38%, #5D9CFA 68%, #9B7BF5 100%);
   --button-background: var(--color-primary-gradient);
   --button-background-hover: var(--color-primary-gradient);
-  --theme-glow-duration: 12s;
+  --theme-glow-duration: 16s;
   --theme-glow-scale: 1.24;
   --theme-glow-opacity-min: 0.20;
   --theme-glow-opacity-max: 0.86;
