@@ -71,7 +71,9 @@ describe('responsive styles', () => {
     expect(themeGlow).toMatch(/inset:\s*-12%;/);
     expect(themeGlow).toMatch(/pointer-events:\s*none;/);
     expect(themeGlow).toMatch(/animation:\s*theme-glow-breathe var\(--theme-glow-duration\) ease-in-out infinite;/);
-    expect(styles).toMatch(/@keyframes theme-glow-breathe\s*\{[\s\S]*opacity:\s*var\(--theme-glow-opacity-min\);[\s\S]*transform:\s*scale\(1\);[\s\S]*opacity:\s*var\(--theme-glow-opacity-max\);[\s\S]*transform:\s*scale\(var\(--theme-glow-scale\)\);/);
+    expect(styles).toMatch(/@keyframes theme-glow-breathe\s*\{[\s\S]*0%\s*\{[\s\S]*opacity:\s*var\(--theme-glow-opacity-min\);[\s\S]*transform:\s*scale\(1\);/);
+    expect(styles).toMatch(/@keyframes theme-glow-breathe\s*\{[\s\S]*25%,\s*\n\s*50%\s*\{[\s\S]*opacity:\s*var\(--theme-glow-opacity-max\);[\s\S]*transform:\s*scale\(var\(--theme-glow-scale\)\);/);
+    expect(styles).toMatch(/@keyframes theme-glow-breathe\s*\{[\s\S]*100%\s*\{[\s\S]*opacity:\s*var\(--theme-glow-opacity-min\);[\s\S]*transform:\s*scale\(1\);/);
     expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*html\[data-jls-theme='rainbow-candy'\] \.app-shell::before,[\s\S]*html\[data-jls-theme='aurora'\] \.app-shell::before\s*\{[\s\S]*animation:\s*none;[\s\S]*opacity:\s*var\(--theme-glow-opacity-min\);[\s\S]*transform:\s*scale\(1\);/);
     expect(styles).not.toContain("html[data-jls-theme='rainbow-candy'] .app-shell > *");
     expect(styles).not.toContain("html[data-jls-theme='aurora'] .app-shell > *");

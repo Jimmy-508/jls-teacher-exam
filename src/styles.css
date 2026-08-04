@@ -1989,15 +1989,20 @@ html[data-jls-theme='aurora'] .app-main {
 }
 
 @keyframes theme-glow-breathe {
-  0%,
-  100% {
+  0% {
     opacity: var(--theme-glow-opacity-min);
     transform: scale(1);
   }
 
+  25%,
   50% {
     opacity: var(--theme-glow-opacity-max);
     transform: scale(var(--theme-glow-scale));
+  }
+
+  100% {
+    opacity: var(--theme-glow-opacity-min);
+    transform: scale(1);
   }
 }
 
