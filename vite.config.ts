@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { DEFAULT_QUESTION_BANK_VERSION } from './src/config/defaultQuestionBankInfo';
 
 const base = '/jls-teacher-exam/';
 const appDescription = '\u004a\u0061\u0072\u0076\u0069\u0073 \u6559\u5e2b\u8cc7\u683c\u8003\u5b78\u7fd2\u7cfb\u7d71';
@@ -69,7 +70,7 @@ export default defineConfig({
             urlPattern: ({ url }) => url.toString().endsWith('/JLS_094_115_v5.0.zip'),
             handler: 'StaleWhileRevalidate',
             options: {
-              cacheName: 'jls-default-question-bank-v5.0.0',
+              cacheName: `jls-default-question-bank-${DEFAULT_QUESTION_BANK_VERSION}`,
               cacheableResponse: {
                 statuses: [200],
               },

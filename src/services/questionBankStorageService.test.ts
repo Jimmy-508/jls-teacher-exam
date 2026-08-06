@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_QUESTION_BANK_VERSION } from '../config/defaultQuestionBankInfo';
 import { JLS_IMPORTED_QUESTION_BANK_STORAGE_KEY } from './storageKeys';
 
 const storage = vi.hoisted(() => ({
@@ -181,10 +182,33 @@ describe('questionBankStorageService', () => {
 
     expect(activeQuestionBank.source).toBe('default');
     expect(activeQuestionBank.questions[0].id).toBe('NEW_DEFAULT');
-    expect(activeQuestionBank.metadata.defaultBankVersion).toBe('5.0.0');
+    expect(activeQuestionBank.metadata.defaultBankVersion).toBe(DEFAULT_QUESTION_BANK_VERSION);
   });
 
-  it('does not replace a user imported question bank when the app version changes', async () => {
+  it('does not re-download the default question bank when the stored default version is current', async () => {
+    indexedDb.metadata = {
+      id: 'active',
+      source: 'default',
+      updatedAt: '2026-07-16T00:00:00.000Z',
+      schemaVersion: 1,
+      questionCount: 1,
+      validation: { isValid: true, errors: [], warnings: [], summary: { totalQuestions: 1 } },
+      summary: { totalQuestions: 1 },
+      defaultBankVersion: DEFAULT_QUESTION_BANK_VERSION,
+    };
+    indexedDb.questions = [{ id: 'CURRENT_DEFAULT', subject: 'subject' }];
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const activeQuestionBank = await getActiveQuestionBank();
+
+    expect(activeQuestionBank.source).toBe('default');
+    expect(activeQuestionBank.questions[0].id).toBe('CURRENT_DEFAULT');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(indexedDb.replaceStoredQuestionBank).not.toHaveBeenCalled();
+  });
+
+  it('does not replace a user imported question bank when the default question bank version changes', async () => {
     indexedDb.metadata = {
       id: 'active',
       source: 'imported',

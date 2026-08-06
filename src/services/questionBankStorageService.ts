@@ -1,4 +1,4 @@
-import { APP_PACKAGE_VERSION } from '../config/appInfo';
+import { DEFAULT_QUESTION_BANK_VERSION } from '../config/defaultQuestionBankInfo';
 import { normalizeSubjectName } from '../constants/subjectOrder';
 import type { Question } from '../types/question';
 import type { QuestionBankValidationResult } from '../types/QuestionBankValidation';
@@ -19,7 +19,6 @@ import { JLS_IMPORTED_QUESTION_BANK_STORAGE_KEY } from './storageKeys';
 
 export const DEFAULT_QUESTION_BANK_FILE_NAME = 'JLS_094_115_v5.0.zip';
 export const DEFAULT_QUESTION_BANK_PATH = `${import.meta.env.BASE_URL}${DEFAULT_QUESTION_BANK_FILE_NAME}`;
-const DEFAULT_QUESTION_BANK_VERSION = APP_PACKAGE_VERSION;
 
 export interface ImportedQuestionBank {
   csvText: string;
