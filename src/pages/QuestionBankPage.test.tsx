@@ -159,9 +159,37 @@ describe('QuestionBankPage', () => {
 
   it('removes Coming Soon from more feature buttons', () => {
     expect(QuestionBankPage.toString()).toContain('openWrongQuestionModal');
+    expect(QuestionBankPage.toString()).toContain('openQuestionBookModal');
     expect(QuestionBankPage.toString()).toContain('openBackupModal');
     expect(QuestionBankPage.toString()).toContain('restoreInputRef');
     expect(QuestionBankPage.toString()).not.toContain('Coming Soon');
+  });
+
+  it('places question-book export before wrong-question export in more features', () => {
+    const source = QuestionBankPage.toString();
+
+    expect(source).toContain('void openQuestionBookModal');
+    expect(source.indexOf('void openQuestionBookModal')).toBeLessThan(source.indexOf('void openWrongQuestionModal'));
+  });
+
+  it('keeps question-book and wrong-question modals isolated', () => {
+    const source = QuestionBankPage.toString();
+
+    expect(source).toContain('"questionBook"');
+    expect(source).toContain('匯出試題本');
+    expect(source).toContain('questionBookSearchInput');
+    expect(source).toContain('practice-search-field');
+    expect(source).toContain('輸入關鍵字，可用空白分隔');
+    expect(source).toContain('匯出錯題本');
+    expect(source).toContain('作答日期');
+    expect(source).toContain('wrongQuestionFilters');
+  });
+
+  it('resets downstream question-book filters when upstream filters change', () => {
+    const source = QuestionBankPage.toString();
+
+    expect(source).toContain("year: event.target.value, subject: ALL, learningTheme: ALL");
+    expect(source).toContain("subject: event.target.value, learningTheme: ALL");
   });
 });
 

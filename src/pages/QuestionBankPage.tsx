@@ -30,10 +30,18 @@ import {
   getWrongQuestionDateFilterError,
   loadWrongQuestionRecords,
 } from '../services/wrongQuestionExportService';
+import {
+  buildQuestionBookFilterOptions,
+  buildQuestionBookPdfModel,
+  createInitialQuestionBookFilters,
+  exportQuestionBookPdf,
+  filterQuestionBookQuestions,
+} from '../services/questionBookExportService';
 import type { JlsBackup, RestorePreview } from '../types/JlsBackup';
 import type { LearningRecord } from '../types/LearningRecord';
 import type { Question } from '../types/question';
 import type { QuestionBankValidationResult } from '../types/QuestionBankValidation';
+import type { QuestionBookFilters } from '../types/QuestionBookExport';
 import type { WrongQuestionFilters } from '../types/WrongQuestionExport';
 
 interface QuestionBankState {
@@ -42,7 +50,7 @@ interface QuestionBankState {
   source: 'default' | 'imported';
 }
 
-type LibraryModal = 'wrongQuestions' | 'backup' | 'restore' | null;
+type LibraryModal = 'questionBook' | 'wrongQuestions' | 'backup' | 'restore' | null;
 type ModalActionStatus = 'idle' | 'processing' | 'success' | 'error';
 type ExportCsvStatus = 'idle' | 'processing' | 'success' | 'error';
 type ActionMessage = {
@@ -75,6 +83,9 @@ export default function QuestionBankPage() {
   const [wrongQuestionModalMessage, setWrongQuestionModalMessage] = useState('');
   const [wrongQuestionModalMessageType, setWrongQuestionModalMessageType] = useState<'success' | 'error'>('success');
   const [wrongQuestionExportStatus, setWrongQuestionExportStatus] = useState<ModalActionStatus>('idle');
+  const [questionBookModalMessage, setQuestionBookModalMessage] = useState('');
+  const [questionBookModalMessageType, setQuestionBookModalMessageType] = useState<'success' | 'error'>('success');
+  const [questionBookExportStatus, setQuestionBookExportStatus] = useState<ModalActionStatus>('idle');
   const [backupModalMessage, setBackupModalMessage] = useState('');
   const [backupModalMessageType, setBackupModalMessageType] = useState<'success' | 'error'>('success');
   const [backupStatus, setBackupStatus] = useState<ModalActionStatus>('idle');
@@ -82,6 +93,9 @@ export default function QuestionBankPage() {
   const [isBusy, setIsBusy] = useState(false);
   const [wrongQuestionQuestions, setWrongQuestionQuestions] = useState<Question[]>([]);
   const [wrongQuestionFilters, setWrongQuestionFilters] = useState<WrongQuestionFilters>(createInitialWrongQuestionFilters);
+  const [questionBookQuestions, setQuestionBookQuestions] = useState<Question[]>([]);
+  const [questionBookFilters, setQuestionBookFilters] = useState<QuestionBookFilters>(createInitialQuestionBookFilters);
+  const [questionBookSearchInput, setQuestionBookSearchInput] = useState('');
   const [recordsByQuestionId, setRecordsByQuestionId] = useState<Record<string, LearningRecord>>({});
   const [questionIdentitiesById, setQuestionIdentitiesById] = useState<Record<string, QuestionIdentitySnapshot>>({});
   const [restorePreview, setRestorePreview] = useState<RestorePreview | null>(null);
@@ -128,6 +142,14 @@ export default function QuestionBankPage() {
     [questionIdentitiesById, recordsByQuestionId, wrongQuestionQuestions, wrongQuestionFilters],
   );
   const wrongQuestionDateFilterError = getWrongQuestionDateFilterError(wrongQuestionFilters);
+  const questionBookFilterOptions = useMemo(
+    () => buildQuestionBookFilterOptions(questionBookQuestions, questionBookFilters),
+    [questionBookQuestions, questionBookFilters],
+  );
+  const questionBookItems = useMemo(
+    () => filterQuestionBookQuestions(questionBookQuestions, questionBookFilters),
+    [questionBookQuestions, questionBookFilters],
+  );
 
   async function handleImportQuestionBank(file: File | undefined) {
     if (!file) {
@@ -237,6 +259,26 @@ export default function QuestionBankPage() {
     }
   }
 
+  async function openQuestionBookModal() {
+    setStatusMessage('');
+    setQuestionBookModalMessage('');
+    setQuestionBookModalMessageType('success');
+    setQuestionBookExportStatus('idle');
+    const initialFilters = createInitialQuestionBookFilters();
+    setQuestionBookFilters(initialFilters);
+    setQuestionBookSearchInput(initialFilters.searchQuery);
+    setIsBusy(true);
+
+    try {
+      setQuestionBookQuestions(await getActiveQuestions());
+      setActiveModal('questionBook');
+    } catch (unknownError) {
+      setStatusMessage(unknownError instanceof Error ? unknownError.message : '試題本資料載入失敗。');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   function openBackupModal() {
     setStatusMessage('');
     setBackupModalMessage('');
@@ -273,6 +315,39 @@ export default function QuestionBankPage() {
       setWrongQuestionModalMessage(unknownError instanceof Error ? unknownError.message : '匯出錯題本失敗。');
       setWrongQuestionModalMessageType('error');
       setWrongQuestionExportStatus('error');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleExportQuestionBook() {
+    if (questionBookItems.length === 0) {
+      return;
+    }
+
+    setIsBusy(true);
+    setStatusMessage('');
+    setQuestionBookModalMessage('');
+    setQuestionBookModalMessageType('success');
+    setQuestionBookExportStatus('processing');
+
+    try {
+      const displayName = await getDisplayName();
+      const model = buildQuestionBookPdfModel({ displayName, items: questionBookItems });
+      const result = await exportQuestionBookPdf(model);
+
+      if (result === 'cancelled') {
+        setQuestionBookExportStatus('idle');
+        return;
+      }
+
+      setQuestionBookModalMessage('試題本已匯出完成，請至瀏覽器下載資料夾查看。');
+      setQuestionBookModalMessageType('success');
+      setQuestionBookExportStatus('success');
+    } catch (unknownError) {
+      setQuestionBookModalMessage(unknownError instanceof Error ? unknownError.message : '匯出試題本失敗。');
+      setQuestionBookModalMessageType('error');
+      setQuestionBookExportStatus('error');
     } finally {
       setIsBusy(false);
     }
@@ -365,11 +440,16 @@ export default function QuestionBankPage() {
     setWrongQuestionModalMessage('');
     setWrongQuestionModalMessageType('success');
     setWrongQuestionExportStatus('idle');
+    setQuestionBookModalMessage('');
+    setQuestionBookModalMessageType('success');
+    setQuestionBookExportStatus('idle');
     setBackupModalMessage('');
     setBackupModalMessageType('success');
     setBackupStatus('idle');
     setQuestionIdentitiesById({});
     setWrongQuestionQuestions([]);
+    setQuestionBookQuestions([]);
+    setQuestionBookSearchInput('');
   }
 
   if (error) {
@@ -436,6 +516,9 @@ export default function QuestionBankPage() {
       <details className="disclosure-card">
         <summary>📦 更多功能</summary>
         <div className="library-actions library-actions--compact">
+          <button className="library-action-button" type="button" onClick={() => void openQuestionBookModal()}>
+            匯出試題本
+          </button>
           <button className="library-action-button" type="button" onClick={() => void openWrongQuestionModal()}>
             匯出錯題本
           </button>
@@ -467,6 +550,111 @@ export default function QuestionBankPage() {
           <div><span>非選題</span><strong>{state.validation.summary.essayQuestionCount}</strong></div>
         </div>
       </details>
+
+      {activeModal === 'questionBook' ? (
+        <Modal isBusy={isBusy} title="匯出試題本" onClose={closeModal}>
+          <div className="modal-form">
+            <label className="form-field">
+              <span>年度</span>
+              <select
+                value={questionBookFilters.year}
+                onChange={(event) => setQuestionBookFilters((current) => ({ ...current, year: event.target.value, subject: ALL, learningTheme: ALL }))}
+              >
+                {questionBookFilterOptions.years.map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>科目</span>
+              <select
+                value={questionBookFilters.subject}
+                onChange={(event) =>
+                  setQuestionBookFilters((current) => ({ ...current, subject: event.target.value, learningTheme: ALL }))
+                }
+              >
+                {questionBookFilterOptions.subjects.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>學習主題</span>
+              <select
+                value={questionBookFilters.learningTheme}
+                onChange={(event) => setQuestionBookFilters((current) => ({ ...current, learningTheme: event.target.value }))}
+              >
+                {questionBookFilterOptions.learningThemes.map((theme) => <option key={theme} value={theme}>{theme}</option>)}
+              </select>
+            </label>
+            <div className="practice-search-field">
+              <div className="practice-search-field__control" role="search">
+                <label className="practice-search-field__label" htmlFor="question-book-search-input">
+                  搜尋題目
+                </label>
+                <div className="practice-search-field__input-wrap">
+                  <span className="practice-search-field__input-icon" aria-hidden="true">
+                    🔍
+                  </span>
+                  <input
+                    id="question-book-search-input"
+                    aria-label="搜尋題目"
+                    enterKeyHint="search"
+                    placeholder="輸入關鍵字，可用空白分隔"
+                    type="search"
+                    value={questionBookSearchInput}
+                    onChange={(event) => setQuestionBookSearchInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        setQuestionBookFilters((current) => ({ ...current, searchQuery: questionBookSearchInput }));
+                      }
+                    }}
+                  />
+                  {questionBookSearchInput || questionBookFilters.searchQuery ? (
+                    <button
+                      className="practice-search-field__clear"
+                      type="button"
+                      aria-label="清除搜尋"
+                      onClick={() => {
+                        setQuestionBookSearchInput('');
+                        setQuestionBookFilters((current) => ({ ...current, searchQuery: '' }));
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {questionBookFilters.searchQuery ? (
+                <p className="practice-search-field__result">
+                  搜尋「{questionBookFilters.searchQuery}」・符合 {questionBookItems.length} 題
+                </p>
+              ) : null}
+            </div>
+            <p>符合條件的試題共 {questionBookItems.length} 題</p>
+            {questionBookItems.length === 0 ? <p className="form-error">目前沒有符合條件的試題。</p> : null}
+            {questionBookModalMessage ? (
+              <p className={questionBookModalMessageType === 'success' ? 'form-status' : 'form-error'}>
+                {questionBookModalMessage}
+              </p>
+            ) : null}
+            <div className="modal-actions">
+              {questionBookExportStatus === 'success' ? null : (
+                <button className="secondary-button" disabled={isBusy} type="button" onClick={closeModal}>取消</button>
+              )}
+              {questionBookExportStatus === 'success' ? (
+                <button className="primary-button" type="button" onClick={closeModal}>完成</button>
+              ) : (
+                <button
+                  className="primary-button"
+                  disabled={isBusy || questionBookItems.length === 0}
+                  type="button"
+                  onClick={() => void handleExportQuestionBook()}
+                >
+                  {questionBookExportStatus === 'processing' ? '正在產生 PDF...' : '匯出 PDF'}
+                </button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      ) : null}
 
       {activeModal === 'wrongQuestions' ? (
         <Modal isBusy={isBusy} title="匯出錯題本" onClose={closeModal}>

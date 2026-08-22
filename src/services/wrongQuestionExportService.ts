@@ -236,24 +236,43 @@ export function buildWrongQuestionPdfModel(params: {
   const displayName = params.displayName.trim() || 'Jimmy';
   const sortedItems = sortWrongQuestionExportItems(params.items);
   const dateInfo = buildWrongQuestionExportDateInfo(params.filters, now);
-  const titleText = `${displayName}的錯題本`;
-  const analysisTitleText = '錯題本解析';
-  const title = `${titleText} ${dateInfo.displayDateLabel}`;
-  const fileName = `${sanitizeFileName(displayName)}_錯題本_${dateInfo.fileDateLabel}.pdf`;
-  const questionLines = buildQuestionLines(sortedItems);
-  const analysisLines = buildAnalysisLines(sortedItems);
+
+  return buildChoiceQuestionPdfModel({
+    displayName,
+    items: sortedItems,
+    now,
+    bookLabel: '錯題本',
+    analysisTitleText: '錯題本解析',
+    displayDateLabel: dateInfo.displayDateLabel,
+    fileDateLabel: dateInfo.fileDateLabel,
+  });
+}
+
+export function buildChoiceQuestionPdfModel(params: {
+  displayName: string;
+  items: readonly WrongQuestionExportItem[];
+  now?: Date;
+  bookLabel: string;
+  analysisTitleText: string;
+  displayDateLabel: string;
+  fileDateLabel: string;
+}): WrongQuestionPdfModel {
+  const now = params.now ?? new Date();
+  const displayName = params.displayName.trim() || 'Jimmy';
+  const sortedItems = sortWrongQuestionExportItems(params.items);
+  const titleText = `${displayName}的${params.bookLabel}`;
 
   return {
-    title,
+    title: `${titleText} ${params.displayDateLabel}`,
     titleText,
-    analysisTitleText,
-    fileName,
+    analysisTitleText: params.analysisTitleText,
+    fileName: `${sanitizeFileName(displayName)}_${params.bookLabel}_${params.fileDateLabel}.pdf`,
     generatedAt: now.toISOString(),
-    formattedExportDate: dateInfo.displayDateLabel,
-    fileDateLabel: dateInfo.fileDateLabel,
+    formattedExportDate: params.displayDateLabel,
+    fileDateLabel: params.fileDateLabel,
     items: sortedItems,
-    questionLines,
-    analysisLines,
+    questionLines: buildQuestionLines(sortedItems),
+    analysisLines: buildAnalysisLines(sortedItems),
   };
 }
 
@@ -1465,7 +1484,7 @@ function matchesSubjectFilter(value: string, filter: string): boolean {
   return filter === ALL_FILTER_VALUE || normalizeSubjectName(value) === normalizeSubjectName(filter);
 }
 
-function compareQuestions(left: Question, right: Question): number {
+export function compareQuestions(left: Question, right: Question): number {
   return (
     compareExamYearsDescending(left.year, right.year) ||
     compareTeacherExamSubjects(left.subject, right.subject) ||
@@ -1552,7 +1571,7 @@ function cleanPdfText(value: string): string {
     .trimEnd();
 }
 
-function sanitizeFileName(value: string): string {
+export function sanitizeFileName(value: string): string {
   return (value.trim() || 'Jimmy').replace(/[\\/:*?"<>|]/g, '_');
 }
 
