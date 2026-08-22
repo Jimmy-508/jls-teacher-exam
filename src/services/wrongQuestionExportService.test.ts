@@ -359,6 +359,40 @@ describe('wrongQuestionExportService', () => {
     expect(image?.x).toBe(103);
   });
 
+  it('uses a taller max height for portrait stem images so reading images do not become tiny', async () => {
+    installCanvasMock();
+    installImageMock({ width: 300, height: 1200 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ stemImage: 'data:image/png;base64,portrait-stem' }), wrongCount: 1 }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
+    expect(image?.height).toBe(862);
+    expect(image?.height).toBeGreaterThan(493);
+    expect(image?.width).toBe(216);
+    expect((image?.width ?? 0) / (image?.height ?? 1)).toBeCloseTo(0.25, 2);
+    expect((image?.x ?? 0) + (image?.width ?? 0)).toBeLessThanOrEqual(1119);
+  });
+
+  it('keeps near-square stem images on the conservative max height', async () => {
+    installCanvasMock();
+    installImageMock({ width: 900, height: 900 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ stemImage: 'data:image/png;base64,square-stem' }), wrongCount: 1 }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
+    expect(image?.width).toBe(493);
+    expect(image?.height).toBe(493);
+    expect(image?.height).toBeLessThanOrEqual(493);
+  });
+
   it('shrinks oversized option images using the remaining option content width', async () => {
     installCanvasMock();
     installImageMock({ width: 2000, height: 1000 });
@@ -497,6 +531,30 @@ describe('wrongQuestionExportService', () => {
     await createWrongQuestionPdfBlobFromModel(model);
 
     expect(getLastWrongQuestionPdfDebugMetadata()?.questionImages[0]?.pageIndex).toBeGreaterThan(1);
+  });
+
+  it('keeps portrait stem images readable after moving them to the next page', async () => {
+    installCanvasMock();
+    installImageMock({ width: 300, height: 1200 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{
+        question: createQuestion({
+          stem: 'Long stem '.repeat(240),
+          stemImage: 'data:image/png;base64,portrait-next-page',
+        }),
+        wrongCount: 1,
+      }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const metadata = getLastWrongQuestionPdfDebugMetadata();
+    const image = metadata?.questionImages[0];
+    expect(image?.pageIndex).toBeGreaterThan(1);
+    expect(image?.height).toBe(862);
+    expect(image?.height).toBeGreaterThan(493);
+    expect(metadata?.questionPages).toBeGreaterThan(1);
   });
 
   it('loads IndexedDB image assets and cleans object URLs after export', async () => {

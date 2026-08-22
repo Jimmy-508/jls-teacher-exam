@@ -62,6 +62,10 @@ const PDF_LAYOUT = {
     sectionBeforePt: 8,
   },
 } as const;
+const PORTRAIT_STEM_IMAGE_ASPECT_RATIO_THRESHOLD = 0.75;
+const STEM_IMAGE_MAX_HEIGHT_RATIO = 0.32;
+const PORTRAIT_STEM_IMAGE_MAX_HEIGHT_RATIO = 0.56;
+const OPTION_IMAGE_MAX_HEIGHT_RATIO = 0.2;
 
 export interface WrongQuestionPdfDebugMetadata {
   questionPages: number;
@@ -711,7 +715,7 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
         const result = await resolvePdfImage(block.source, imageCache);
         const imageLeftEdge = getPdfImageLeftEdge(block, context, marginLeft);
         const imageLayout = result
-          ? getPdfImageLayout(result.width, result.height, imageLeftEdge, rightEdge, getPdfImageMaxHeight(block), getPdfImageMinReadableWidthRatio(block))
+          ? getPdfImageLayout(result.width, result.height, imageLeftEdge, rightEdge, getPdfImageMaxHeight(block, result.width, result.height), getPdfImageMinReadableWidthRatio(block))
           : null;
         const blockHeight = imageLayout
           ? ptToPx(PDF_LAYOUT.spacing.blankPt) + imageLayout.height + ptToPx(PDF_LAYOUT.spacing.blockAfterPt)
@@ -1410,11 +1414,23 @@ function getPdfImageMinReadableWidthRatio(block: PdfImageBlock): number {
   return block.align === 'optionContent' ? 0.42 : 0.55;
 }
 
-function getPdfImageMaxHeight(block: PdfImageBlock): number {
+function getPdfImageMaxHeight(block: PdfImageBlock, naturalWidth: number, naturalHeight: number): number {
   const usablePageHeight = CANVAS_HEIGHT_PX - ptToPx(PDF_LAYOUT.margin.topPt + PDF_LAYOUT.margin.bottomPt);
-  const ratio = block.align === 'optionContent' ? 0.2 : 0.32;
+  const ratio = getPdfImageMaxHeightRatio(block, naturalWidth, naturalHeight);
 
   return Math.round(usablePageHeight * ratio);
+}
+
+function getPdfImageMaxHeightRatio(block: PdfImageBlock, naturalWidth: number, naturalHeight: number): number {
+  if (block.align === 'optionContent') {
+    return OPTION_IMAGE_MAX_HEIGHT_RATIO;
+  }
+
+  const aspectRatio = naturalHeight > 0 ? naturalWidth / naturalHeight : 1;
+
+  return aspectRatio < PORTRAIT_STEM_IMAGE_ASPECT_RATIO_THRESHOLD
+    ? PORTRAIT_STEM_IMAGE_MAX_HEIGHT_RATIO
+    : STEM_IMAGE_MAX_HEIGHT_RATIO;
 }
 
 interface OptionImageGridItem {
@@ -1568,7 +1584,7 @@ function prepareOptionImageGridLayouts(
 
   items.forEach((item) => {
     item.layout = item.image
-      ? getPdfImageLayout(item.image.width, item.image.height, leftEdge, leftEdge + columnWidth, getPdfImageMaxHeight(item.imageBlock), getPdfImageMinReadableWidthRatio(item.imageBlock))
+      ? getPdfImageLayout(item.image.width, item.image.height, leftEdge, leftEdge + columnWidth, getPdfImageMaxHeight(item.imageBlock, item.image.width, item.image.height), getPdfImageMinReadableWidthRatio(item.imageBlock))
       : null;
   });
 
