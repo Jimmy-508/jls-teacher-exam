@@ -1,4 +1,4 @@
-﻿﻿import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../components/Modal';
 import {
   createJlsBackup,
@@ -36,6 +36,7 @@ import {
   createInitialQuestionBookFilters,
   exportQuestionBookPdf,
   filterQuestionBookQuestions,
+  normalizeQuestionBookSearchQuery,
 } from '../services/questionBookExportService';
 import type { JlsBackup, RestorePreview } from '../types/JlsBackup';
 import type { LearningRecord } from '../types/LearningRecord';
@@ -333,7 +334,7 @@ export default function QuestionBankPage() {
 
     try {
       const displayName = await getDisplayName();
-      const model = buildQuestionBookPdfModel({ displayName, items: questionBookItems });
+      const model = buildQuestionBookPdfModel({ displayName, items: questionBookItems, filters: questionBookFilters });
       const result = await exportQuestionBookPdf(model);
 
       if (result === 'cancelled') {
@@ -603,7 +604,7 @@ export default function QuestionBankPage() {
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         event.preventDefault();
-                        setQuestionBookFilters((current) => ({ ...current, searchQuery: questionBookSearchInput }));
+                        setQuestionBookFilters((current) => ({ ...current, searchQuery: normalizeQuestionBookSearchQuery(questionBookSearchInput) }));
                       }
                     }}
                   />

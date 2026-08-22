@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CHOICE_QUESTION_TYPE, ESSAY_QUESTION_TYPE } from './questionBankFields';
 import {
+  buildChoiceQuestionPdfModel,
   buildWrongQuestionFilterOptions,
   buildWrongQuestionPdfModel,
   compareSubjects,
@@ -350,9 +351,11 @@ describe('wrongQuestionExportService', () => {
     await createWrongQuestionPdfBlobFromModel(model);
 
     const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
-    expect(image?.width).toBe(1047);
-    expect(image?.height).toBe(524);
-    expect(image?.x).toBe(72);
+    expect(image?.width).toBe(986);
+    expect(image?.height).toBe(493);
+    expect(image?.height).toBeLessThanOrEqual(493);
+    expect((image?.width ?? 0) / (image?.height ?? 1)).toBeCloseTo(2, 1);
+    expect(image?.x).toBe(103);
   });
 
   it('shrinks oversized option images using the remaining option content width', async () => {
@@ -367,11 +370,72 @@ describe('wrongQuestionExportService', () => {
 
     const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
     expect(image?.x).toBe(148);
-    expect(image?.width).toBe(971);
-    expect(image?.height).toBe(486);
+    expect(image?.width).toBe(616);
+    expect(image?.height).toBe(308);
+    expect(image?.height).toBeLessThanOrEqual(308);
+    expect((image?.width ?? 0) / (image?.height ?? 1)).toBeCloseTo(2, 1);
     expect((image?.x ?? 0) + (image?.width ?? 0)).toBeLessThanOrEqual(1119);
   });
 
+  it('lays out multiple image-only options in compact rows instead of one image per page', async () => {
+    installCanvasMock();
+    installImageMock({ width: 600, height: 300 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{
+        question: createQuestion({
+          optionA: '',
+          optionB: '',
+          optionC: '',
+          optionD: '',
+          optionAImage: 'data:image/png;base64,a',
+          optionBImage: 'data:image/png;base64,b',
+          optionCImage: 'data:image/png;base64,c',
+          optionDImage: 'data:image/png;base64,d',
+        }),
+        wrongCount: 1,
+      }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const images = getLastWrongQuestionPdfDebugMetadata()?.questionImages ?? [];
+    expect(images).toHaveLength(4);
+    expect(new Set(images.map((image) => image.pageIndex)).size).toBe(1);
+    expect(new Set(images.map((image) => image.x)).size).toBe(2);
+    expect(new Set(images.map((image) => image.y)).size).toBe(2);
+    expect(images.every((image) => image.width <= 482)).toBe(true);
+    expect(images.every((image) => image.height <= 308)).toBe(true);
+  });
+
+  it('renders long question-book title filters on a second centered title line', async () => {
+    const contexts = installCanvasMock();
+    const titleFilterText = '113年・教育原理與制度・認知發展・主題：皮亞傑皮亞傑皮亞傑';
+    const model = buildChoiceQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ id: 'q1' }), wrongCount: 0 }],
+      bookLabel: '試題本',
+      analysisTitleText: '試題本解析',
+      displayDateLabel: '8/22',
+      fileDateLabel: '2026-08-22',
+      titleFilterText,
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const calls = contexts[0].fillText.mock.calls;
+    const renderedText = calls.map((call) => String(call[0])).join('');
+    const titleLine = calls.find((call) => String(call[0]) === 'Jimmy');
+    const filterLine = calls.find((call) => String(call[0]).includes('皮亞傑'));
+
+    expect(getLastWrongQuestionPdfDebugMetadata()?.renderedQuestionTitle).toBe(`Jimmy的試題本（${titleFilterText}）8/22`);
+    expect(renderedText).toContain('Jimmy的試題本');
+    expect(renderedText).toContain('113年');
+    expect(renderedText).toContain('皮亞傑皮亞傑皮亞傑');
+    expect(titleLine).toBeTruthy();
+    expect(filterLine).toBeTruthy();
+    expect(filterLine?.[2]).toBeGreaterThan(titleLine?.[2] ?? 0);
+  });
   it('moves an image to the next page when it does not fit in the remaining page space', async () => {
     installCanvasMock();
     installImageMock({ width: 900, height: 900 });

@@ -3,6 +3,7 @@ import { CHOICE_QUESTION_TYPE, ESSAY_QUESTION_TYPE } from './questionBankFields'
 import {
   buildQuestionBookFilterOptions,
   buildQuestionBookPdfModel,
+  buildQuestionBookTitleFilterText,
   createInitialQuestionBookFilters,
   filterQuestionBookQuestions,
 } from './questionBookExportService';
@@ -61,6 +62,37 @@ describe('questionBookExportService', () => {
     expect(options.learningThemes).toEqual([getAllFilterValue(), '課程理論']);
   });
 
+  it('builds question-book PDF title filters from applied filters only', () => {
+    const all = getAllFilterValue();
+    const baseFilters = createInitialQuestionBookFilters();
+
+    expect(buildQuestionBookTitleFilterText(baseFilters)).toBe('');
+    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113' })).toBe('113年');
+    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113', subject: '教育原理與制度' })).toBe('113年・教育原理與制度');
+    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113', subject: '教育原理與制度', learningTheme: '認知發展' })).toBe('113年・教育原理與制度・認知發展');
+    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113', subject: '教育原理與制度', searchQuery: '  皮亞傑   認知  ' })).toBe('113年・教育原理與制度・主題：皮亞傑 認知');
+    expect(buildQuestionBookTitleFilterText({ year: all, subject: all, learningTheme: all, searchQuery: '' })).toBe('');
+  });
+
+  it('adds applied question-book filters to the PDF title without changing the filename', () => {
+    const model = buildQuestionBookPdfModel({
+      displayName: 'Jimmy',
+      now: new Date('2026-08-22T10:00:00'),
+      filters: {
+        ...createInitialQuestionBookFilters(),
+        year: '113',
+        subject: '教育原理與制度',
+        learningTheme: '認知發展',
+        searchQuery: '皮亞傑',
+      },
+      items: [{ question: createQuestion({ id: 'q1' }) }],
+    });
+
+    expect(model.titleText).toBe('Jimmy的試題本');
+    expect(model.titleFilterText).toBe('113年・教育原理與制度・認知發展・主題：皮亞傑');
+    expect(model.title).toBe('Jimmy的試題本（113年・教育原理與制度・認知發展・主題：皮亞傑）8/22');
+    expect(model.fileName).toBe('Jimmy_試題本_2026-08-22.pdf');
+  });
   it('builds question-book PDF metadata with wrong-question PDF line structure and image-backed items', () => {
     const model = buildQuestionBookPdfModel({
       displayName: 'Jimmy',

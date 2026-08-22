@@ -254,6 +254,7 @@ export function buildChoiceQuestionPdfModel(params: {
   now?: Date;
   bookLabel: string;
   analysisTitleText: string;
+  titleFilterText?: string;
   displayDateLabel: string;
   fileDateLabel: string;
 }): WrongQuestionPdfModel {
@@ -261,11 +262,14 @@ export function buildChoiceQuestionPdfModel(params: {
   const displayName = params.displayName.trim() || 'Jimmy';
   const sortedItems = sortWrongQuestionExportItems(params.items);
   const titleText = `${displayName}的${params.bookLabel}`;
+  const titleDetail = params.titleFilterText ? `（${params.titleFilterText}）` : '';
+  const titleDateSeparator = titleDetail ? '' : ' ';
 
   return {
-    title: `${titleText} ${params.displayDateLabel}`,
+    title: `${titleText}${titleDetail}${titleDateSeparator}${params.displayDateLabel}`,
     titleText,
     analysisTitleText: params.analysisTitleText,
+    titleFilterText: params.titleFilterText,
     fileName: `${sanitizeFileName(displayName)}_${params.bookLabel}_${params.fileDateLabel}.pdf`,
     generatedAt: now.toISOString(),
     formattedExportDate: params.displayDateLabel,
@@ -457,6 +461,7 @@ interface PdfSection {
 
 interface PdfSectionTitle {
   text: string;
+  detailLabel?: string;
   dateLabel?: string;
 }
 
@@ -636,14 +641,15 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
   };
 
   const renderSectionTitle = async (title: PdfSectionTitle, spacingAfter: number) => {
-    const blockHeight = lineHeight + spacingAfter;
+    const titleHeight = getSectionTitleHeight(context, title, scale, rightEdge - marginLeft, lineHeight);
+    const blockHeight = titleHeight + spacingAfter;
 
     if (y + blockHeight > pageBottom && hasContent) {
       await finishCurrentPage();
     }
 
-    drawMixedSizeCenteredTitle(context, title, pageWidth / 2, y, scale);
-    y += lineHeight + spacingAfter;
+    drawMixedSizeCenteredTitle(context, title, pageWidth / 2, y, scale, rightEdge - marginLeft, lineHeight);
+    y += titleHeight + spacingAfter;
     hasContent = true;
   };
 
@@ -656,11 +662,29 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
         continue;
       }
 
+      const optionImageGridItems = section.kind === 'questions'
+        ? await collectOptionImageGridItems(section.blocks, blockIndex, imageCache)
+        : [];
+
+      if (optionImageGridItems.length >= 2) {
+        const blockHeight = getOptionImageGridHeight(optionImageGridItems, context, marginLeft, rightEdge, lineHeight);
+
+        if (y + blockHeight > pageBottom && hasContent) {
+          await finishCurrentPage();
+        }
+
+        renderOptionImageGrid(optionImageGridItems, context, marginLeft, rightEdge, y, pageIndex, questionImages, lineHeight);
+        y += blockHeight;
+        hasContent = true;
+        blockIndex += optionImageGridItems.length * 2 - 1;
+        continue;
+      }
+
       if (block.kind === 'questionImage') {
         const result = await resolvePdfImage(block.source, imageCache);
         const imageLeftEdge = getPdfImageLeftEdge(block, context, marginLeft);
         const imageLayout = result
-          ? getPdfImageLayout(result.width, result.height, imageLeftEdge, rightEdge)
+          ? getPdfImageLayout(result.width, result.height, imageLeftEdge, rightEdge, getPdfImageMaxHeight(block))
           : null;
         const blockHeight = imageLayout
           ? ptToPx(PDF_LAYOUT.spacing.blankPt) + imageLayout.height + ptToPx(PDF_LAYOUT.spacing.blockAfterPt)
@@ -800,6 +824,7 @@ function buildWrongQuestionPdfDocument(model: WrongQuestionPdfModel): WrongQuest
       forceNewPage: false,
       title: {
         text: model.titleText,
+        detailLabel: model.titleFilterText,
         dateLabel: model.formattedExportDate,
       },
       blocks: buildQuestionBlocksFromItems(model.items),
@@ -1063,28 +1088,82 @@ function drawMixedSizeCenteredTitle(
   centerX: number,
   y: number,
   scale: number,
+  availableWidth: number,
+  lineHeight: number,
 ): void {
   const mainRuns = splitTextByScript(title.text);
-  const dateRuns = title.dateLabel ? splitTextByScript(title.dateLabel) : [];
+  const secondaryRuns = splitTextByScript(getTitleSecondaryText(title));
   const mainFontSizePx = TITLE_FONT_PT * scale;
   const dateFontSizePx = TITLE_DATE_FONT_PT * scale;
-  const gapWidth = dateRuns.length > 0 ? measureTextRun(context, { text: ' ', script: 'latin' }, mainFontSizePx) : 0;
-  const mainWidth = mainRuns.reduce((sum, run) => sum + measureTextRun(context, run, mainFontSizePx), 0);
-  const dateWidth = dateRuns.reduce((sum, run) => sum + measureTextRun(context, run, dateFontSizePx), 0);
-  const totalWidth = mainWidth + gapWidth + dateWidth;
-  const startX = Math.round(centerX - totalWidth / 2);
+  const gapWidth = getTitleInlineGapWidth(context, title, mainFontSizePx);
+  const mainWidth = measureTextRuns(context, mainRuns, mainFontSizePx);
+  const secondaryWidth = measureTextRuns(context, secondaryRuns, dateFontSizePx);
+  const totalWidth = mainWidth + (secondaryRuns.length > 0 ? gapWidth + secondaryWidth : 0);
 
+  if (title.detailLabel && totalWidth > availableWidth) {
+    const mainX = Math.round(centerX - mainWidth / 2);
+    const secondaryX = Math.round(centerX - secondaryWidth / 2);
+    drawRuns(context, mainRuns, mainX, Math.round(y), mainFontSizePx);
+    drawRuns(context, secondaryRuns, secondaryX, Math.round(y + lineHeight), dateFontSizePx);
+    return;
+  }
+
+  const startX = Math.round(centerX - totalWidth / 2);
   drawRuns(context, mainRuns, startX, Math.round(y), mainFontSizePx);
 
-  if (dateRuns.length > 0) {
-    drawRuns(context, dateRuns, startX + mainWidth + gapWidth, Math.round(y + (mainFontSizePx - dateFontSizePx) / 2), dateFontSizePx);
+  if (secondaryRuns.length > 0) {
+    drawRuns(context, secondaryRuns, startX + mainWidth + gapWidth, Math.round(y + (mainFontSizePx - dateFontSizePx) / 2), dateFontSizePx);
   }
 }
 
-function formatSectionTitle(title: PdfSectionTitle): string {
-  return title.dateLabel ? `${title.text} ${title.dateLabel}` : title.text;
+function getSectionTitleHeight(
+  context: CanvasRenderingContext2D,
+  title: PdfSectionTitle,
+  scale: number,
+  availableWidth: number,
+  lineHeight: number,
+): number {
+  if (!title.detailLabel) {
+    return lineHeight;
+  }
+
+  const mainRuns = splitTextByScript(title.text);
+  const secondaryRuns = splitTextByScript(getTitleSecondaryText(title));
+  const mainFontSizePx = TITLE_FONT_PT * scale;
+  const dateFontSizePx = TITLE_DATE_FONT_PT * scale;
+  const totalWidth =
+    measureTextRuns(context, mainRuns, mainFontSizePx) +
+    getTitleInlineGapWidth(context, title, mainFontSizePx) +
+    measureTextRuns(context, secondaryRuns, dateFontSizePx);
+
+  return totalWidth > availableWidth ? lineHeight * 2 : lineHeight;
 }
 
+function getTitleSecondaryText(title: PdfSectionTitle): string {
+  if (title.detailLabel && title.dateLabel) {
+    return `（${title.detailLabel}）${title.dateLabel}`;
+  }
+
+  return title.dateLabel ?? '';
+}
+
+function getTitleInlineGapWidth(context: CanvasRenderingContext2D, title: PdfSectionTitle, mainFontSizePx: number): number {
+  return title.dateLabel && !title.detailLabel ? measureTextRun(context, { text: ' ', script: 'latin' }, mainFontSizePx) : 0;
+}
+
+function measureTextRuns(context: CanvasRenderingContext2D, runs: readonly TextRun[], fontSizePx: number): number {
+  return runs.reduce((sum, run) => sum + measureTextRun(context, run, fontSizePx), 0);
+}
+
+function formatSectionTitle(title: PdfSectionTitle): string {
+  const secondaryText = getTitleSecondaryText(title);
+
+  if (!secondaryText) {
+    return title.text;
+  }
+
+  return title.detailLabel ? `${title.text}${secondaryText}` : `${title.text} ${secondaryText}`;
+}
 function drawRuns(
   context: CanvasRenderingContext2D,
   runs: readonly TextRun[],
@@ -1283,15 +1362,149 @@ function getPdfImageLayout(
   naturalHeight: number,
   leftEdge: number,
   rightEdge: number,
+  maxHeight = Number.POSITIVE_INFINITY,
 ): { width: number; height: number } {
   const availableWidth = Math.max(1, rightEdge - leftEdge);
-  const scale = naturalWidth > availableWidth ? availableWidth / naturalWidth : 1;
+  const widthScale = naturalWidth > availableWidth ? availableWidth / naturalWidth : 1;
+  const heightScale = naturalHeight > maxHeight ? maxHeight / naturalHeight : 1;
+  const scale = Math.min(1, widthScale, heightScale);
   return {
     width: Math.max(1, Math.round(naturalWidth * scale)),
     height: Math.max(1, Math.round(naturalHeight * scale)),
   };
 }
 
+function getPdfImageMaxHeight(block: PdfImageBlock): number {
+  const usablePageHeight = CANVAS_HEIGHT_PX - ptToPx(PDF_LAYOUT.margin.topPt + PDF_LAYOUT.margin.bottomPt);
+  const ratio = block.align === 'optionContent' ? 0.2 : 0.32;
+
+  return Math.round(usablePageHeight * ratio);
+}
+
+interface OptionImageGridItem {
+  label: ChoiceKey;
+  imageBlock: PdfImageBlock;
+  image: LoadedPdfImage | null;
+  layout: { width: number; height: number } | null;
+}
+
+async function collectOptionImageGridItems(
+  blocks: readonly PdfContentBlock[],
+  startIndex: number,
+  imageCache: PdfImageCache,
+): Promise<OptionImageGridItem[]> {
+  const items: OptionImageGridItem[] = [];
+  let index = startIndex;
+
+  while (items.length < 2) {
+    const optionBlock = blocks[index];
+    const imageBlock = blocks[index + 1];
+
+    if (!isImageOnlyOptionBlock(optionBlock) || !isOptionImageBlock(imageBlock)) {
+      break;
+    }
+
+    const image = await resolvePdfImage(imageBlock.source, imageCache);
+    items.push({ label: optionBlock.text.slice(1, 2) as ChoiceKey, imageBlock, image, layout: null });
+    index += 2;
+  }
+
+  return items;
+}
+
+function getOptionImageGridHeight(
+  items: OptionImageGridItem[],
+  context: CanvasRenderingContext2D,
+  marginLeft: number,
+  rightEdge: number,
+  lineHeight: number,
+): number {
+  prepareOptionImageGridLayouts(items, context, marginLeft, rightEdge);
+  const maxImageHeight = Math.max(lineHeight, ...items.map((item) => item.layout?.height ?? lineHeight));
+
+  return lineHeight + ptToPx(PDF_LAYOUT.spacing.blankPt) + maxImageHeight + ptToPx(PDF_LAYOUT.spacing.blockAfterPt);
+}
+
+function renderOptionImageGrid(
+  items: OptionImageGridItem[],
+  context: CanvasRenderingContext2D,
+  marginLeft: number,
+  rightEdge: number,
+  y: number,
+  pageIndex: number,
+  questionImages: WrongQuestionPdfDebugMetadata['questionImages'],
+  lineHeight: number,
+): void {
+  const { leftEdge, columnWidth, columnGap } = getOptionImageGridMetrics(context, marginLeft, rightEdge);
+  const imageY = y + lineHeight + ptToPx(PDF_LAYOUT.spacing.blankPt);
+
+  items.forEach((item, index) => {
+    const x = leftEdge + index * (columnWidth + columnGap);
+    drawRuns(context, splitTextByScript(`(${item.label})`), x, y);
+
+    if (item.image && item.layout) {
+      context.drawImage(item.image.image, x, imageY, item.layout.width, item.layout.height);
+      questionImages.push({
+        source: item.imageBlock.source,
+        pageIndex,
+        x,
+        y: imageY,
+        width: item.layout.width,
+        height: item.layout.height,
+        status: 'rendered',
+      });
+      return;
+    }
+
+    const failureText = '\u5716\u7247\u7121\u6cd5\u8f09\u5165';
+    drawMutedText(context, failureText, x, imageY);
+    questionImages.push({
+      source: item.imageBlock.source,
+      pageIndex,
+      x,
+      y: imageY,
+      width: 0,
+      height: 0,
+      status: 'failed',
+    });
+  });
+}
+
+function prepareOptionImageGridLayouts(
+  items: OptionImageGridItem[],
+  context: CanvasRenderingContext2D,
+  marginLeft: number,
+  rightEdge: number,
+): void {
+  const { leftEdge, columnWidth } = getOptionImageGridMetrics(context, marginLeft, rightEdge);
+
+  items.forEach((item) => {
+    item.layout = item.image
+      ? getPdfImageLayout(item.image.width, item.image.height, leftEdge, leftEdge + columnWidth, getPdfImageMaxHeight(item.imageBlock))
+      : null;
+  });
+}
+
+function getOptionImageGridMetrics(
+  context: CanvasRenderingContext2D,
+  marginLeft: number,
+  rightEdge: number,
+): { leftEdge: number; columnWidth: number; columnGap: number } {
+  const leftEdge = marginLeft + ptToPx(PDF_LAYOUT.question.optionIndentPt) + measureTextRun(context, { text: '(A) ', script: 'latin' });
+  const columnGap = ptToPx(12);
+  const availableWidth = Math.max(1, rightEdge - leftEdge);
+  const columnWidth = Math.max(1, Math.floor((availableWidth - columnGap) / 2));
+
+  return { leftEdge, columnWidth, columnGap };
+}
+
+function isImageOnlyOptionBlock(block: PdfContentBlock | undefined): block is PdfTextBlock {
+  return Boolean(block && block.kind === 'questionOption' && /^\([A-D]\)$/.test(block.text.trim()));
+}
+
+function isOptionImageBlock(block: PdfContentBlock | undefined): block is PdfImageBlock {
+  return Boolean(block && block.kind === 'questionImage' && block.align === 'optionContent');
+}
 function drawMutedText(context: CanvasRenderingContext2D, text: string, x: number, y: number): void {
   const previousFillStyle = context.fillStyle;
   context.fillStyle = '#6b7280';

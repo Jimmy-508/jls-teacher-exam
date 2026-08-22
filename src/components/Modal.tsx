@@ -9,14 +9,21 @@ interface ModalProps {
 
 export default function Modal({ title, children, isBusy = false, onClose }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const isBusyRef = useRef(isBusy);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    isBusyRef.current = isBusy;
+    onCloseRef.current = onClose;
+  }, [isBusy, onClose]);
 
   useEffect(() => {
     const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialogRef.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !isBusy) {
-        onClose();
+      if (event.key === 'Escape' && !isBusyRef.current) {
+        onCloseRef.current();
       }
     }
 
@@ -26,7 +33,7 @@ export default function Modal({ title, children, isBusy = false, onClose }: Moda
       document.removeEventListener('keydown', handleKeyDown);
       previousActiveElement?.focus();
     };
-  }, [isBusy, onClose]);
+  }, []);
 
   return (
     <div

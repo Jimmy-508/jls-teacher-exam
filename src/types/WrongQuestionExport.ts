@@ -23,6 +23,7 @@ export interface WrongQuestionPdfModel {
   title: string;
   titleText: string;
   analysisTitleText: string;
+  titleFilterText?: string;
   fileName: string;
   generatedAt: string;
   formattedExportDate: string;

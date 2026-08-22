@@ -1,6 +1,6 @@
 import { CHOICE_QUESTION_TYPE } from './questionBankFields';
 import { normalizeChoiceKey } from './questionEngine';
-import { matchesPracticeSearch, isSameSubject, sortCoreConcepts } from './practiceFilterService';
+import { matchesPracticeSearch, normalizePracticeSearchQuery, isSameSubject, sortCoreConcepts } from './practiceFilterService';
 import { saveBlobWithPicker, type SaveBlobResult } from './fileSaveService';
 import { buildExamYearOptions } from './yearService';
 import { sortTeacherExamSubjects } from '../constants/subjectOrder';
@@ -64,6 +64,7 @@ export function filterQuestionBookQuestions(
 export function buildQuestionBookPdfModel(params: {
   displayName: string;
   items: readonly QuestionBookExportItem[];
+  filters?: QuestionBookFilters;
   now?: Date;
 }): QuestionBookPdfModel {
   const now = params.now ?? new Date();
@@ -78,7 +79,43 @@ export function buildQuestionBookPdfModel(params: {
     analysisTitleText: '試題本解析',
     displayDateLabel,
     fileDateLabel,
+    titleFilterText: buildQuestionBookTitleFilterText(params.filters),
   });
+}
+
+export function normalizeQuestionBookSearchQuery(value: string): string {
+  return normalizePracticeSearchQuery(value);
+}
+
+export function buildQuestionBookTitleFilterText(filters: QuestionBookFilters | undefined): string {
+  if (!filters) {
+    return '';
+  }
+
+  const labels = [formatQuestionBookYearFilter(filters.year), normalizeAllFilterLabel(filters.subject), normalizeAllFilterLabel(filters.learningTheme)]
+    .filter(Boolean) as string[];
+  const searchQuery = normalizeQuestionBookSearchQuery(filters.searchQuery);
+
+  if (searchQuery) {
+    labels.push(`主題：${searchQuery}`);
+  }
+
+  return labels.join('・');
+}
+
+function formatQuestionBookYearFilter(value: string): string {
+  const normalized = normalizeAllFilterLabel(value);
+
+  if (!normalized) {
+    return '';
+  }
+
+  return normalized.endsWith('年') ? normalized : `${normalized}年`;
+}
+
+function normalizeAllFilterLabel(value: string): string {
+  const normalized = value.trim();
+  return normalized && normalized !== ALL ? normalized : '';
 }
 
 export async function exportQuestionBookPdf(model: QuestionBookPdfModel): Promise<SaveBlobResult> {
