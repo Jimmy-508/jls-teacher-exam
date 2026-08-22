@@ -67,10 +67,10 @@ describe('questionBookExportService', () => {
     const baseFilters = createInitialQuestionBookFilters();
 
     expect(buildQuestionBookTitleFilterText(baseFilters)).toBe('');
-    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113' })).toBe('113年');
-    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113', subject: '教育原理與制度' })).toBe('113年・教育原理與制度');
-    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113', subject: '教育原理與制度', learningTheme: '認知發展' })).toBe('113年・教育原理與制度・認知發展');
-    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113', subject: '教育原理與制度', searchQuery: '  皮亞傑   認知  ' })).toBe('113年・教育原理與制度・主題：皮亞傑 認知');
+    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113' })).toBe('主題：113年');
+    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113', subject: '教育原理與制度' })).toBe('主題：113年・教育原理與制度');
+    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113', subject: '教育原理與制度', learningTheme: '認知發展' })).toBe('主題：113年・教育原理與制度・認知發展');
+    expect(buildQuestionBookTitleFilterText({ ...baseFilters, year: '113', subject: '教育原理與制度', searchQuery: '  皮亞傑   認知  ' })).toBe('主題：113年・教育原理與制度・皮亞傑 認知');
     expect(buildQuestionBookTitleFilterText({ year: all, subject: all, learningTheme: all, searchQuery: '' })).toBe('');
   });
 
@@ -89,8 +89,8 @@ describe('questionBookExportService', () => {
     });
 
     expect(model.titleText).toBe('Jimmy的試題本');
-    expect(model.titleFilterText).toBe('113年・教育原理與制度・認知發展・主題：皮亞傑');
-    expect(model.title).toBe('Jimmy的試題本（113年・教育原理與制度・認知發展・主題：皮亞傑）8/22');
+    expect(model.titleFilterText).toBe('主題：113年・教育原理與制度・認知發展・皮亞傑');
+    expect(model.title).toBe('Jimmy的試題本 主題：113年・教育原理與制度・認知發展・皮亞傑 08/22');
     expect(model.fileName).toBe('Jimmy_試題本_2026-08-22.pdf');
   });
   it('builds question-book PDF metadata with wrong-question PDF line structure and image-backed items', () => {
@@ -107,7 +107,7 @@ describe('questionBookExportService', () => {
     });
 
     expect(model.titleText).toBe('Jimmy的試題本');
-    expect(model.title).toBe('Jimmy的試題本 8/22');
+    expect(model.title).toBe('Jimmy的試題本 08/22');
     expect(model.analysisTitleText).toBe('試題本解析');
     expect(model.fileName).toBe('Jimmy_試題本_2026-08-22.pdf');
     expect(model.questionLines).toEqual([
@@ -124,6 +124,28 @@ describe('questionBookExportService', () => {
     expect(model.items[0].question.optionAImage).toBe('jls-question-image:a');
   });
 
+  it('deduplicates only consecutive repeated stem images in question-book PDF models', () => {
+    const consecutive = buildQuestionBookPdfModel({
+      displayName: 'Jimmy',
+      items: [
+        { question: createQuestion({ id: 'q5', questionNumber: '5', stemImage: 'jls-question-image:X' }) },
+        { question: createQuestion({ id: 'q6', questionNumber: '6', stemImage: 'jls-question-image:X' }) },
+        { question: createQuestion({ id: 'q7', questionNumber: '7', stemImage: 'jls-question-image:X' }) },
+      ],
+    });
+    const separated = buildQuestionBookPdfModel({
+      displayName: 'Jimmy',
+      items: [
+        { question: createQuestion({ id: 'q5', questionNumber: '5', stemImage: 'jls-question-image:X' }) },
+        { question: createQuestion({ id: 'q6', questionNumber: '6', stemImage: 'jls-question-image:X' }) },
+        { question: createQuestion({ id: 'q7', questionNumber: '7', stemImage: 'jls-question-image:Y' }) },
+        { question: createQuestion({ id: 'q8', questionNumber: '8', stemImage: 'jls-question-image:X' }) },
+      ],
+    });
+
+    expect(consecutive.items.map((item) => item.question.stemImage)).toEqual(['jls-question-image:X', '', '']);
+    expect(separated.items.map((item) => item.question.stemImage)).toEqual(['jls-question-image:X', '', 'jls-question-image:Y', 'jls-question-image:X']);
+  });
   it('limits exportable questions to the choice-question format supported by the shared PDF renderer', () => {
     const result = filterQuestionBookQuestions([
       createQuestion({ id: 'choice' }),

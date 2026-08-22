@@ -292,7 +292,7 @@ describe('wrongQuestionExportService', () => {
 
     expect(images).toHaveLength(5);
     expect(images.every((image) => image.status === 'rendered')).toBe(true);
-    expect(stemImage?.x).toBe(476);
+    expect(stemImage?.x).toBe(308);
     expect(optionImages.map((image) => image.x)).toEqual([148, 148, 148, 148]);
     expect(optionImages.every((image) => image.x < (stemImage?.x ?? 0))).toBe(true);
     expect(contexts.flatMap((context) => context.drawImage.mock.calls)).toHaveLength(5);
@@ -324,7 +324,7 @@ describe('wrongQuestionExportService', () => {
     expect(image?.x).toBeGreaterThan(100);
   });
 
-  it('centers images within the content width and does not enlarge small images', async () => {
+  it('centers images within the content width and upscales small stem images to a readable size', async () => {
     installCanvasMock();
     installImageMock({ width: 120, height: 60 });
     const model = buildWrongQuestionPdfModel({
@@ -335,9 +335,10 @@ describe('wrongQuestionExportService', () => {
     await createWrongQuestionPdfBlobFromModel(model);
 
     const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
-    expect(image?.width).toBe(120);
-    expect(image?.height).toBe(60);
-    expect(image?.x).toBe(536);
+    expect(image?.width).toBe(576);
+    expect(image?.height).toBe(288);
+    expect((image?.width ?? 0) / (image?.height ?? 1)).toBeCloseTo(2, 1);
+    expect(image?.x).toBe(308);
   });
 
   it('shrinks oversized images proportionally and keeps them centered', async () => {
@@ -377,6 +378,22 @@ describe('wrongQuestionExportService', () => {
     expect((image?.x ?? 0) + (image?.width ?? 0)).toBeLessThanOrEqual(1119);
   });
 
+  it('upscales small option images while keeping them inside the option content area', async () => {
+    installCanvasMock();
+    installImageMock({ width: 160, height: 80 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{ question: createQuestion({ optionAImage: 'data:image/png;base64,small-option' }), wrongCount: 1 }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const image = getLastWrongQuestionPdfDebugMetadata()?.questionImages[0];
+    expect(image?.x).toBe(148);
+    expect(image?.width).toBe(408);
+    expect(image?.height).toBe(204);
+    expect((image?.x ?? 0) + (image?.width ?? 0)).toBeLessThanOrEqual(1119);
+  });
   it('lays out multiple image-only options in compact rows instead of one image per page', async () => {
     installCanvasMock();
     installImageMock({ width: 600, height: 300 });
@@ -408,15 +425,42 @@ describe('wrongQuestionExportService', () => {
     expect(images.every((image) => image.height <= 308)).toBe(true);
   });
 
+  it('falls back to single-column option image rows when two columns would make wide images too small', async () => {
+    installCanvasMock();
+    installImageMock({ width: 1200, height: 300 });
+    const model = buildWrongQuestionPdfModel({
+      displayName: 'Jimmy',
+      items: [{
+        question: createQuestion({
+          optionA: '',
+          optionB: '',
+          optionAImage: 'data:image/png;base64:wide-a',
+          optionBImage: 'data:image/png;base64:wide-b',
+        }),
+        wrongCount: 1,
+      }],
+    });
+
+    await createWrongQuestionPdfBlobFromModel(model);
+
+    const images = getLastWrongQuestionPdfDebugMetadata()?.questionImages ?? [];
+    expect(images).toHaveLength(2);
+    expect(new Set(images.map((image) => image.x)).size).toBe(1);
+    expect(new Set(images.map((image) => image.y)).size).toBe(2);
+    expect(images.every((image) => image.width > 482)).toBe(true);
+    expect(images.every((image) => image.width <= 986)).toBe(true);
+    expect(images.every((image) => image.height <= 308)).toBe(true);
+  });
+
   it('renders long question-book title filters on a second centered title line', async () => {
     const contexts = installCanvasMock();
-    const titleFilterText = '113年・教育原理與制度・認知發展・主題：皮亞傑皮亞傑皮亞傑';
+    const titleFilterText = '主題：113年・教育原理與制度・認知發展・皮亞傑皮亞傑皮亞傑';
     const model = buildChoiceQuestionPdfModel({
       displayName: 'Jimmy',
       items: [{ question: createQuestion({ id: 'q1' }), wrongCount: 0 }],
       bookLabel: '試題本',
       analysisTitleText: '試題本解析',
-      displayDateLabel: '8/22',
+      displayDateLabel: '08/22',
       fileDateLabel: '2026-08-22',
       titleFilterText,
     });
@@ -428,7 +472,7 @@ describe('wrongQuestionExportService', () => {
     const titleLine = calls.find((call) => String(call[0]) === 'Jimmy');
     const filterLine = calls.find((call) => String(call[0]).includes('皮亞傑'));
 
-    expect(getLastWrongQuestionPdfDebugMetadata()?.renderedQuestionTitle).toBe(`Jimmy的試題本（${titleFilterText}）8/22`);
+    expect(getLastWrongQuestionPdfDebugMetadata()?.renderedQuestionTitle).toBe(`Jimmy的試題本 ${titleFilterText} 08/22`);
     expect(renderedText).toContain('Jimmy的試題本');
     expect(renderedText).toContain('113年');
     expect(renderedText).toContain('皮亞傑皮亞傑皮亞傑');

@@ -257,16 +257,18 @@ export function buildChoiceQuestionPdfModel(params: {
   titleFilterText?: string;
   displayDateLabel: string;
   fileDateLabel: string;
+  suppressConsecutiveDuplicateStemImages?: boolean;
 }): WrongQuestionPdfModel {
   const now = params.now ?? new Date();
   const displayName = params.displayName.trim() || 'Jimmy';
-  const sortedItems = sortWrongQuestionExportItems(params.items);
+  const sortedItems = params.suppressConsecutiveDuplicateStemImages
+    ? suppressConsecutiveDuplicateStemImages(sortWrongQuestionExportItems(params.items))
+    : sortWrongQuestionExportItems(params.items);
   const titleText = `${displayName}的${params.bookLabel}`;
-  const titleDetail = params.titleFilterText ? `（${params.titleFilterText}）` : '';
-  const titleDateSeparator = titleDetail ? '' : ' ';
+  const titleDetail = params.titleFilterText ? ` ${params.titleFilterText}` : '';
 
   return {
-    title: `${titleText}${titleDetail}${titleDateSeparator}${params.displayDateLabel}`,
+    title: `${titleText}${titleDetail} ${params.displayDateLabel}`,
     titleText,
     analysisTitleText: params.analysisTitleText,
     titleFilterText: params.titleFilterText,
@@ -327,6 +329,31 @@ export function getAllFilterValue(): string {
   return ALL_FILTER_VALUE;
 }
 
+function suppressConsecutiveDuplicateStemImages(items: readonly WrongQuestionExportItem[]): WrongQuestionExportItem[] {
+  let previousStemImage = '';
+
+  return items.map((item) => {
+    const currentStemImage = normalizePdfImageSource(item.question.stemImage);
+    const shouldSuppress = currentStemImage.length > 0 && currentStemImage === previousStemImage;
+    previousStemImage = currentStemImage;
+
+    if (!shouldSuppress) {
+      return item;
+    }
+
+    return {
+      ...item,
+      question: {
+        ...item.question,
+        stemImage: '',
+      },
+    };
+  });
+}
+
+function normalizePdfImageSource(source: string | undefined): string {
+  return source?.trim() ?? '';
+}
 function buildQuestionLines(items: readonly WrongQuestionExportItem[]): string[] {
   return items.flatMap(({ question }, index) => [
     formatQuestionHeading(question),
@@ -684,7 +711,7 @@ async function renderPdfDocumentToJpegPages(documentModel: WrongQuestionPdfDocum
         const result = await resolvePdfImage(block.source, imageCache);
         const imageLeftEdge = getPdfImageLeftEdge(block, context, marginLeft);
         const imageLayout = result
-          ? getPdfImageLayout(result.width, result.height, imageLeftEdge, rightEdge, getPdfImageMaxHeight(block))
+          ? getPdfImageLayout(result.width, result.height, imageLeftEdge, rightEdge, getPdfImageMaxHeight(block), getPdfImageMinReadableWidthRatio(block))
           : null;
         const blockHeight = imageLayout
           ? ptToPx(PDF_LAYOUT.spacing.blankPt) + imageLayout.height + ptToPx(PDF_LAYOUT.spacing.blockAfterPt)
@@ -1141,14 +1168,14 @@ function getSectionTitleHeight(
 
 function getTitleSecondaryText(title: PdfSectionTitle): string {
   if (title.detailLabel && title.dateLabel) {
-    return `（${title.detailLabel}）${title.dateLabel}`;
+    return `${title.detailLabel} ${title.dateLabel}`;
   }
 
   return title.dateLabel ?? '';
 }
 
 function getTitleInlineGapWidth(context: CanvasRenderingContext2D, title: PdfSectionTitle, mainFontSizePx: number): number {
-  return title.dateLabel && !title.detailLabel ? measureTextRun(context, { text: ' ', script: 'latin' }, mainFontSizePx) : 0;
+  return title.dateLabel ? measureTextRun(context, { text: ' ', script: 'latin' }, mainFontSizePx) : 0;
 }
 
 function measureTextRuns(context: CanvasRenderingContext2D, runs: readonly TextRun[], fontSizePx: number): number {
@@ -1162,7 +1189,7 @@ function formatSectionTitle(title: PdfSectionTitle): string {
     return title.text;
   }
 
-  return title.detailLabel ? `${title.text}${secondaryText}` : `${title.text} ${secondaryText}`;
+  return `${title.text} ${secondaryText}`;
 }
 function drawRuns(
   context: CanvasRenderingContext2D,
@@ -1363,15 +1390,24 @@ function getPdfImageLayout(
   leftEdge: number,
   rightEdge: number,
   maxHeight = Number.POSITIVE_INFINITY,
+  minReadableWidthRatio = 0,
 ): { width: number; height: number } {
   const availableWidth = Math.max(1, rightEdge - leftEdge);
-  const widthScale = naturalWidth > availableWidth ? availableWidth / naturalWidth : 1;
-  const heightScale = naturalHeight > maxHeight ? maxHeight / naturalHeight : 1;
-  const scale = Math.min(1, widthScale, heightScale);
+  const maxWidthScale = availableWidth / naturalWidth;
+  const maxHeightScale = maxHeight / naturalHeight;
+  const maxScale = Math.min(maxWidthScale, maxHeightScale);
+  const minReadableWidth = availableWidth * minReadableWidthRatio;
+  const targetWidthScale = minReadableWidth > naturalWidth ? minReadableWidth / naturalWidth : 1;
+  const scale = Math.max(Number.MIN_VALUE, Math.min(Math.max(1, targetWidthScale), maxScale));
+
   return {
     width: Math.max(1, Math.round(naturalWidth * scale)),
     height: Math.max(1, Math.round(naturalHeight * scale)),
   };
+}
+
+function getPdfImageMinReadableWidthRatio(block: PdfImageBlock): number {
+  return block.align === 'optionContent' ? 0.42 : 0.55;
 }
 
 function getPdfImageMaxHeight(block: PdfImageBlock): number {
@@ -1386,6 +1422,13 @@ interface OptionImageGridItem {
   imageBlock: PdfImageBlock;
   image: LoadedPdfImage | null;
   layout: { width: number; height: number } | null;
+}
+
+interface OptionImageGridMetrics {
+  leftEdge: number;
+  columnWidth: number;
+  columnGap: number;
+  columnCount: 1 | 2;
 }
 
 async function collectOptionImageGridItems(
@@ -1419,9 +1462,15 @@ function getOptionImageGridHeight(
   rightEdge: number,
   lineHeight: number,
 ): number {
-  prepareOptionImageGridLayouts(items, context, marginLeft, rightEdge);
-  const maxImageHeight = Math.max(lineHeight, ...items.map((item) => item.layout?.height ?? lineHeight));
+  const metrics = prepareOptionImageGridLayouts(items, context, marginLeft, rightEdge);
 
+  if (metrics.columnCount === 1) {
+    return items.reduce((height, item) => (
+      height + lineHeight + ptToPx(PDF_LAYOUT.spacing.blankPt) + (item.layout?.height ?? lineHeight) + ptToPx(PDF_LAYOUT.spacing.blockAfterPt)
+    ), 0);
+  }
+
+  const maxImageHeight = Math.max(lineHeight, ...items.map((item) => item.layout?.height ?? lineHeight));
   return lineHeight + ptToPx(PDF_LAYOUT.spacing.blankPt) + maxImageHeight + ptToPx(PDF_LAYOUT.spacing.blockAfterPt);
 }
 
@@ -1435,7 +1484,45 @@ function renderOptionImageGrid(
   questionImages: WrongQuestionPdfDebugMetadata['questionImages'],
   lineHeight: number,
 ): void {
-  const { leftEdge, columnWidth, columnGap } = getOptionImageGridMetrics(context, marginLeft, rightEdge);
+  const { leftEdge, columnWidth, columnGap, columnCount } = prepareOptionImageGridLayouts(items, context, marginLeft, rightEdge);
+
+  if (columnCount === 1) {
+    let currentY = y;
+
+    items.forEach((item) => {
+      const imageY = currentY + lineHeight + ptToPx(PDF_LAYOUT.spacing.blankPt);
+      drawRuns(context, splitTextByScript(`(${item.label})`), leftEdge, currentY);
+
+      if (item.image && item.layout) {
+        context.drawImage(item.image.image, leftEdge, imageY, item.layout.width, item.layout.height);
+        questionImages.push({
+          source: item.imageBlock.source,
+          pageIndex,
+          x: leftEdge,
+          y: imageY,
+          width: item.layout.width,
+          height: item.layout.height,
+          status: 'rendered',
+        });
+      } else {
+        const failureText = '\u5716\u7247\u7121\u6cd5\u8f09\u5165';
+        drawMutedText(context, failureText, leftEdge, imageY);
+        questionImages.push({
+          source: item.imageBlock.source,
+          pageIndex,
+          x: leftEdge,
+          y: imageY,
+          width: 0,
+          height: 0,
+          status: 'failed',
+        });
+      }
+
+      currentY += lineHeight + ptToPx(PDF_LAYOUT.spacing.blankPt) + (item.layout?.height ?? lineHeight) + ptToPx(PDF_LAYOUT.spacing.blockAfterPt);
+    });
+    return;
+  }
+
   const imageY = y + lineHeight + ptToPx(PDF_LAYOUT.spacing.blankPt);
 
   items.forEach((item, index) => {
@@ -1475,27 +1562,44 @@ function prepareOptionImageGridLayouts(
   context: CanvasRenderingContext2D,
   marginLeft: number,
   rightEdge: number,
-): void {
-  const { leftEdge, columnWidth } = getOptionImageGridMetrics(context, marginLeft, rightEdge);
+): OptionImageGridMetrics {
+  const metrics = getOptionImageGridMetrics(items, context, marginLeft, rightEdge);
+  const { leftEdge, columnWidth } = metrics;
 
   items.forEach((item) => {
     item.layout = item.image
-      ? getPdfImageLayout(item.image.width, item.image.height, leftEdge, leftEdge + columnWidth, getPdfImageMaxHeight(item.imageBlock))
+      ? getPdfImageLayout(item.image.width, item.image.height, leftEdge, leftEdge + columnWidth, getPdfImageMaxHeight(item.imageBlock), getPdfImageMinReadableWidthRatio(item.imageBlock))
       : null;
   });
+
+  return metrics;
 }
 
 function getOptionImageGridMetrics(
+  items: readonly OptionImageGridItem[],
   context: CanvasRenderingContext2D,
   marginLeft: number,
   rightEdge: number,
-): { leftEdge: number; columnWidth: number; columnGap: number } {
+): OptionImageGridMetrics {
   const leftEdge = marginLeft + ptToPx(PDF_LAYOUT.question.optionIndentPt) + measureTextRun(context, { text: '(A) ', script: 'latin' });
   const columnGap = ptToPx(12);
   const availableWidth = Math.max(1, rightEdge - leftEdge);
-  const columnWidth = Math.max(1, Math.floor((availableWidth - columnGap) / 2));
+  const columnCount = shouldUseSingleColumnOptionImageGrid(items) ? 1 : 2;
+  const columnWidth = columnCount === 1
+    ? availableWidth
+    : Math.max(1, Math.floor((availableWidth - columnGap) / 2));
 
-  return { leftEdge, columnWidth, columnGap };
+  return { leftEdge, columnWidth, columnGap, columnCount };
+}
+
+function shouldUseSingleColumnOptionImageGrid(items: readonly OptionImageGridItem[]): boolean {
+  return items.length > 1 && items.some((item) => {
+    if (!item.image) {
+      return false;
+    }
+
+    return item.image.width / item.image.height >= 2.4;
+  });
 }
 
 function isImageOnlyOptionBlock(block: PdfContentBlock | undefined): block is PdfTextBlock {

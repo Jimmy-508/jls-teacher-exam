@@ -68,7 +68,7 @@ export function buildQuestionBookPdfModel(params: {
   now?: Date;
 }): QuestionBookPdfModel {
   const now = params.now ?? new Date();
-  const displayDateLabel = `${now.getMonth() + 1}/${now.getDate()}`;
+  const displayDateLabel = formatDisplayDate(now);
   const fileDateLabel = formatLocalFileDate(now);
 
   return buildChoiceQuestionPdfModel({
@@ -80,6 +80,7 @@ export function buildQuestionBookPdfModel(params: {
     displayDateLabel,
     fileDateLabel,
     titleFilterText: buildQuestionBookTitleFilterText(params.filters),
+    suppressConsecutiveDuplicateStemImages: true,
   });
 }
 
@@ -97,10 +98,10 @@ export function buildQuestionBookTitleFilterText(filters: QuestionBookFilters | 
   const searchQuery = normalizeQuestionBookSearchQuery(filters.searchQuery);
 
   if (searchQuery) {
-    labels.push(`主題：${searchQuery}`);
+    labels.push(searchQuery);
   }
 
-  return labels.join('・');
+  return labels.length > 0 ? `主題：${labels.join('・')}` : '';
 }
 
 function formatQuestionBookYearFilter(value: string): string {
@@ -153,6 +154,12 @@ function getQuestionLearningTheme(question: Question): string {
 
 function toWrongQuestionPdfItem(item: QuestionBookExportItem): WrongQuestionExportItem {
   return { question: item.question, wrongCount: 0 };
+}
+
+function formatDisplayDate(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${month}/${day}`;
 }
 
 function formatLocalFileDate(date: Date): string {
